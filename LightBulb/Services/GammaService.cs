@@ -18,11 +18,13 @@ public sealed class GammaService : IDisposable
     private readonly Func<IReadOnlyList<DisplayContext>>? _enumerateOverride;
     private readonly Func<long> _clock;
     private readonly bool _runRecoveryTimer;
+    private readonly Func<bool> _nightLightActive;
 
     private readonly SettingsService _settings;
     private readonly object _sync = new();
     private readonly IDisposable _events;
     private readonly System.Threading.Timer _recoveryTimer;
+    private readonly System.Threading.Timer _watchdogTimer;
     private IReadOnlyList<DisplayContext> _contexts = [];
     private IReadOnlyList<DisplayInfo> _displays = [];
     private bool _contextsValid;
@@ -32,6 +34,7 @@ public sealed class GammaService : IDisposable
     private bool _displayOff;
     private bool _hasRequest;
     private long _recoveryDeadline;
+    private long _handoverDeadline;
     private long _lastInvalidation;
     private long _lastUpdate;
     private IReadOnlyDictionary<string, ColorConfiguration> _requested =
@@ -49,7 +52,8 @@ public sealed class GammaService : IDisposable
         SettingsService settings,
         Func<IReadOnlyList<DisplayContext>>? enumerate,
         Func<long> clock,
-        bool registerEvents
+        bool registerEvents,
+        Func<bool>? nightLightActive = null
     )
     {
         _settings = settings;
@@ -57,8 +61,22 @@ public sealed class GammaService : IDisposable
         _clock = clock;
         _lastInvalidation = clock() - 5000;
         _runRecoveryTimer = registerEvents;
+        _nightLightActive =
+            nightLightActive
+            ?? (
+                () =>
+                    registerEvents
+                    && !StartOptions.Current.IsPreview
+                    && NightLight.ReadActive() is true
+            );
         _recoveryTimer = new System.Threading.Timer(
             _ => RecoveryTick(),
+            null,
+            Timeout.Infinite,
+            Timeout.Infinite
+        );
+        _watchdogTimer = new System.Threading.Timer(
+            _ => WatchdogTick(),
             null,
             Timeout.Infinite,
             Timeout.Infinite
@@ -224,6 +242,7 @@ public sealed class GammaService : IDisposable
             if (_displayOff)
             {
                 _recoveryDeadline = 0;
+                _handoverDeadline = 0;
                 _recoveryTimer.Change(Timeout.Infinite, Timeout.Infinite);
                 return;
             }
@@ -255,7 +274,22 @@ public sealed class GammaService : IDisposable
             {
                 if (_isDisposed || !_hasRequest || _displayOff)
                     return;
-                Apply(true, reason != "requested");
+                var now = _clock();
+                if (reason == "requested")
+                    _handoverDeadline = 0;
+                else if (
+                    _settings.IsWakeRecoveryEnabled
+                    && _recoveryDeadline <= now
+                    && _nightLightActive()
+                )
+                {
+                    // Let Windows finish restoring its warm fallback before
+                    // handing the color layer back to per-monitor profiles.
+                    _handoverDeadline = now + 1500;
+                    Diagnostics.ColorTrace.Write("Night Light wake handover: wait 1500 ms");
+                }
+                if (now >= _handoverDeadline)
+                    Apply(true, reason != "requested");
                 if (_settings.IsWakeRecoveryEnabled)
                 {
                     _recoveryDeadline = _clock() + 5000;
@@ -286,7 +320,34 @@ public sealed class GammaService : IDisposable
                 _recoveryTimer.Change(Timeout.Infinite, Timeout.Infinite);
                 return;
             }
+            if (_clock() < _handoverDeadline)
+                return;
             Apply(true);
+        }
+        finally
+        {
+            System.Threading.Monitor.Exit(_sync);
+        }
+    }
+
+    internal void WatchdogTick()
+    {
+        // Independent of UI timers and foreground changes. Readback checks do
+        // not rewrite matching LUTs, so an external reset can be repaired while
+        // the application stays in the tray without fighting a stable filter.
+        if (!System.Threading.Monitor.TryEnter(_sync))
+            return;
+        try
+        {
+            if (_isDisposed || !_hasRequest || _displayOff || _isUpdating || _isRecovering)
+                return;
+            var now = _clock();
+            if (
+                now < _handoverDeadline
+                || (_settings.IsWakeRecoveryEnabled && now < _recoveryDeadline)
+            )
+                return;
+            Apply(true, traceChecks: false);
         }
         finally
         {
@@ -303,15 +364,17 @@ public sealed class GammaService : IDisposable
         {
             if (_isDisposed)
                 return;
+            if (!_hasRequest && _runRecoveryTimer && !StartOptions.Current.IsPreview)
+                _watchdogTimer.Change(250, 250);
             _hasRequest = true;
             _fallback = fallback;
             _requested = configurations ?? new Dictionary<string, ColorConfiguration>();
-            if (!_displayOff && !_isRecovering)
+            if (!_displayOff && !_isRecovering && _clock() >= _handoverDeadline)
                 Apply(false);
         }
     }
 
-    private void Apply(bool force, bool verifyBeforeWrite = true)
+    private void Apply(bool force, bool verifyBeforeWrite = true, bool traceChecks = true)
     {
         EnsureContexts();
         var now = _clock();
@@ -356,7 +419,7 @@ public sealed class GammaService : IDisposable
                 var applied = verifyBeforeWrite
                     ? context.Device.EnsureGamma(color.Red, color.Green, color.Blue)
                     : context.Device.SetGamma(color.Red, color.Green, color.Blue);
-                if (force || context.Device.DidWriteGamma is true)
+                if ((force && traceChecks) || context.Device.DidWriteGamma is true)
                     Diagnostics.ColorTrace.Write(
                         $"Color {(force ? "recovery" : "update")} [{context.Info.Name}]: {config}; {context.Device.ApplyDiagnostics}; write={context.Device.DidWriteGamma}; success={applied}; {Stopwatch.GetElapsedTime(started).TotalMilliseconds:F1} ms"
                     );
@@ -400,6 +463,7 @@ public sealed class GammaService : IDisposable
                 return;
             _isDisposed = true;
             _recoveryTimer.Dispose();
+            _watchdogTimer.Dispose();
             foreach (var context in _contexts)
             {
                 context.Device.ResetGamma();

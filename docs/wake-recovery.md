@@ -109,7 +109,33 @@ truncated data before any registry write. Original state/settings blobs were
 backed up locally. Only the state was changed from off to on; the strength and
 disabled schedule were left untouched. With Candlelight stopped, readback changed
 to R=65535, G=18739, B=0, showing that Night Light uses the same color-system LUT
-on this device. A separate physical suspension test of Night Light is pending.
+on this device. The user performed a roughly 15-second suspension/resume test
+with Candlelight stopped and Night Light on: no blue flash was visible.
+This establishes a useful guard on this hardware, rather than a universal result.
+
+A warm public-GDI handover guard was rejected by the driver while Night Light
+was active, so Night Light was not switched off. Instead, Candlelight was started
+with Night Light's logical state still on. Its private color-system write
+replaced the Night Light LUT directly with 2700 K / 100% (65026/42514/22289),
+retaining GDI identity; the call completed in 22.1 ms. Registry state remained on.
+A further physical test with both active produced no blue flash, but the user
+reported visible alternation between filters during wake. Turning Night Light
+off afterwards reset the color layer, and Candlelight only restored the profile
+after its window was opened. Its five-second recovery worker had already ended;
+the application had no independent readback watchdog outside that interval.
+
+Version 0.1.3 adds a background readback check every 250 ms, independent of the
+window, dashboard ticks and foreground notifications. Matching filters are never
+rewritten. Checks pause while the display is off and defer to the existing wake
+worker. When a known active Night Light state is detected during wake, profile
+writes wait 1500 ms for Windows to settle its fallback filter. Duplicate wake
+notifications do not extend this handover, queued profile edits use the latest
+values, and explicit **Reaplicar** bypasses the delay. Unknown CloudStore schemas
+fall back to ordinary immediate recovery; the production reader never writes
+Night Light strength, schedule or state. Tests cover hidden-window-independent
+repair, display-off, queued changes, handover timing and malformed state blobs.
+The fixed delay is a hardware test candidate, not a guarantee that every Windows
+driver completes its transition in that time. Physical retesting is required.
 The diagnostic switch is not installed as an automatic application feature.
 
 Sources:

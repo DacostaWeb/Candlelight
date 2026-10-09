@@ -208,4 +208,77 @@ public class GammaServiceSpecs
         Assert.Empty(service.FailedDisplayIds);
         Assert.Equal(2, device.Writes.Count);
     }
+
+    [Fact]
+    public void Background_watchdog_repairs_an_external_reset_without_ui_ticks()
+    {
+        var device = new Device();
+        using var service = new GammaService(
+            new SettingsService(),
+            () => [Context("internal", device)],
+            () => 10000,
+            false
+        );
+        service.WatchdogTick();
+        Assert.Empty(device.Writes);
+        service.SetGamma(new(2700, 1));
+        device.Writes.Clear();
+        device.KeepCurrent = true;
+        service.WatchdogTick();
+        Assert.Empty(device.Writes);
+        device.KeepCurrent = false; // Windows turned Night Light off and reset the LUT.
+        service.WatchdogTick();
+        Assert.Equal(GammaColor.FromConfiguration(new(2700, 1)), Assert.Single(device.Writes));
+        service.OnDisplayState(0);
+        service.WatchdogTick();
+        Assert.Single(device.Writes);
+    }
+
+    [Fact]
+    public void Night_light_wake_handover_waits_once_and_queues_new_profile_values()
+    {
+        long now = 10000;
+        var device = new Device();
+        using var service = new GammaService(
+            new SettingsService(),
+            () => [Context("internal", device)],
+            () => now,
+            false,
+            () => true
+        );
+        service.SetGamma(new(2700, 1));
+        device.Writes.Clear();
+        service.OnDisplayState(1);
+        now += 500;
+        service.OnDisplayState(1); // Another Windows power notification must not extend the handover.
+        service.SetGamma(new(4000, 1));
+        service.RecoveryTick();
+        service.WatchdogTick();
+        Assert.Empty(device.Writes);
+        now = 11499;
+        service.RecoveryTick();
+        Assert.Empty(device.Writes);
+        now = 11500;
+        service.RecoveryTick();
+        Assert.Equal(GammaColor.FromConfiguration(new(4000, 1)), Assert.Single(device.Writes));
+    }
+
+    [Fact]
+    public void Explicit_reapply_bypasses_night_light_handover()
+    {
+        var device = new Device();
+        using var service = new GammaService(
+            new SettingsService(),
+            () => [Context("internal", device)],
+            () => 10000,
+            false,
+            () => true
+        );
+        service.SetGamma(new(2700, 1));
+        device.Writes.Clear();
+        service.OnDisplayState(1);
+        Assert.Empty(device.Writes);
+        service.Recover();
+        Assert.Single(device.Writes);
+    }
 }
