@@ -14,6 +14,8 @@ public partial class MainView : Window<MainViewModel>
     private void Window_OnOpened(object? sender, EventArgs args)
     {
         DataContext.IsOpen = true;
+        if (StartOptions.Current.IsDiagnosticInstance)
+            Title += " · diagnóstico";
         if (StartOptions.Current.PreviewCaptureDirectory is { } directory)
             Dispatcher.UIThread.Post(async () =>
                 await Diagnostics.PreviewVerification.RunAsync(this, DataContext, directory)

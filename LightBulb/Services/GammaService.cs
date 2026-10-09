@@ -39,6 +39,7 @@ public sealed class GammaService : IDisposable
         StringComparer.OrdinalIgnoreCase
     );
     private ColorConfiguration _fallback = ColorConfiguration.Default;
+    private string? _lastTrace;
 
     public GammaService(SettingsService settings)
         : this(settings, null, () => Environment.TickCount64, true) { }
@@ -95,6 +96,8 @@ public sealed class GammaService : IDisposable
     public event Action? DisplaysChanged;
     public event Action? ApplyStatusChanged;
     public IReadOnlyList<string> FailedDisplayIds { get; private set; } = [];
+    public IReadOnlyDictionary<string, string> FailureReasons { get; private set; } =
+        new Dictionary<string, string>();
 
     public IReadOnlyList<DisplayInfo> GetDisplays()
     {
@@ -300,10 +303,15 @@ public sealed class GammaService : IDisposable
             .Where(d => _contexts.All(c => c.Info.Id != d.Id))
             .Select(d => d.Id)
             .ToList();
+        var reasons = failures.ToDictionary(id => id, _ => "Não foi possível aceder ao ecrã.");
         if (StartOptions.Current.IsPreview)
+        {
             failures.Clear();
+            reasons.Clear();
+        }
         _isUpdating = true;
         var updated = false;
+        var trace = new System.Text.StringBuilder();
         try
         {
             foreach (var context in _contexts)
@@ -312,6 +320,9 @@ public sealed class GammaService : IDisposable
                     ? value
                     : _fallback;
                 config = config.Clamp(500, 20000, 0.01, 1);
+                trace.Append(
+                    $"{context.Info.Name} ({context.Info.Id}): {config}; profile={_requested.ContainsKey(context.Info.Id)}; "
+                );
                 if (
                     !stale
                     && _applied.TryGetValue(context.Info.Id, out var previous)
@@ -326,15 +337,24 @@ public sealed class GammaService : IDisposable
                 else
                 {
                     failures.Add(context.Info.Id);
+                    reasons[context.Info.Id] =
+                        context.Device.FailureReason ?? "O driver recusou os valores pedidos.";
                     _applied.Remove(context.Info.Id);
                 }
             }
             if (updated)
                 _lastUpdate = now;
-            if (!FailedDisplayIds.SequenceEqual(failures))
+            if (!FailedDisplayIds.SequenceEqual(failures) || !FailureReasons.SequenceEqual(reasons))
             {
                 FailedDisplayIds = failures.ToArray();
+                FailureReasons = reasons;
                 ApplyStatusChanged?.Invoke();
+            }
+            var status = trace + $"failures={string.Join(";", reasons.Values)}";
+            if (_lastTrace != status)
+            {
+                _lastTrace = status;
+                Diagnostics.ColorTrace.Write(status);
             }
         }
         finally

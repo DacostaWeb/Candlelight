@@ -13,9 +13,37 @@ immediate night values on wake, retry expiry, display-off, driver failure and
 polling. The compiled UI preview checks real preset/row command bindings,
 independent profiles, schedule editing and persistence without touching gamma.
 
-The connected HDMI monitor is detected as `13A1F`; both active displays have a
-physical EDID identity. No real sleep, hibernation, lid-close, gamma readback or
-USB-C reconnection test has been performed. USB-C profile reuse depends on the
+The HDMI monitor was detected as `13A1F`; both it and the internal display have a
+physical EDID identity. A live Windows color-system write of 500 K / 15% on the
+OLED was accepted and read back as R=9754, G=0, B=0; the user confirmed it became
+red and dim. HDR/advanced color was disabled on both displays. Public GDI writes
+accepted moderate warmth but rejected this red/dim target despite the registry
+unlock already being present. The upstream project documents that the unlock may
+require a restart or a new Windows session.
+
+Version 0.1.1 adds a verified per-monitor fallback using dynamically resolved
+`mscms.dll` exports `InternalSetDeviceGammaRamp` and `InternalGetAppliedGammaRamp`.
+These are undocumented Windows APIs and may change across OS versions. Both must
+exist to use this path. Failures and readback mismatches remain visible instead
+of being reported as success. After installing the color-system target, GDI is
+reset to an exact identity LUT to prevent the two filters multiplying. The
+backend choice survives context recreation and both layers are reset on exit.
+Existing nonidentity color-system LUTs are detected even in a new process, so a
+successful GDI write cannot leave an earlier filter stacked above the controls.
+Recovery callbacks are gated until dashboard initialization, preventing a default
+daytime write before settings have loaded. The compiled UI verification additionally
+exercises numeric inputs and sliders rather than only assigning model properties.
+Automated tests cover rejected/silently ignored writes, unavailable exports,
+daytime transitions, context recreation, reset order and exact-zero validation.
+This compatibility implementation is original C# code; the export ABI was
+cross-checked with the [KelvinShift gamma implementation](https://github.com/mackid1993/KelvinShift/blob/main/win32/src/GammaService.cpp).
+
+No real sleep, hibernation, lid-close or USB-C reconnection test has been performed.
+The OLED was subsequently disconnected. The production C# `DeviceContext` was
+then exercised on the internal panel at 2700 K / 100% brightness: its color-system
+readback was R=65026, G=42514, B=22289 and GDI was an exact identity (65535 in each
+channel). The user confirmed the visible color change on the internal screen.
+USB-C profile reuse depends on the
 monitor reporting the same manufacturer, product and serial across inputs.
 Monitors without usable serials fall back to their connection path. Simultaneous
 duplicate serials are disambiguated by connection.
@@ -45,3 +73,4 @@ Sources:
 - [Microsoft: automatic resume notification](https://learn.microsoft.com/en-us/windows/win32/power/pbt-apmresumeautomatic)
 - [Microsoft: monitor identifying information](https://learn.microsoft.com/en-us/windows/win32/wmicoreprov/wmimonitorid)
 - [Night Light control implementation and reverse-engineered schema](https://github.com/kvnxiao/win-nightlight-cli)
+- [Upstream gamma-range restart report](https://github.com/Tyrrrz/LightBulb/issues/253)

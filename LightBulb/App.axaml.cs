@@ -109,6 +109,9 @@ public partial class App : Application, IDisposable
     {
         // Load settings
         _settingsService.Load();
+        Diagnostics.ColorTrace.Write(
+            $"Start {Program.VersionString}; settings={StartOptions.Current.SettingsPath}; profiles={_settingsService.DisplayProfiles.Count}"
+        );
 
         RequestedThemeVariant = _settingsService.Theme switch
         {

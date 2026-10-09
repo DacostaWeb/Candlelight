@@ -116,6 +116,8 @@ public partial class DashboardViewModel : ViewModelBase
 
     private void OnRecoveryRequested()
     {
+        if (!_isInitialized)
+            return;
         if (!Dispatcher.UIThread.CheckAccess())
         {
             Dispatcher.UIThread.Post(OnRecoveryRequested, DispatcherPriority.Send);
@@ -130,6 +132,8 @@ public partial class DashboardViewModel : ViewModelBase
 
     private void ApplyConfigurations()
     {
+        if (!_isInitialized)
+            return;
         var configurations = Displays.Evaluate(
             SolarTimes,
             Instant,

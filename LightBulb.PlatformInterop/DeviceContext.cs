@@ -1,16 +1,32 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using LightBulb.PlatformInterop.Internal;
 
 namespace LightBulb.PlatformInterop;
 
-public partial class DeviceContext(nint handle) : NativeResource(handle), IGammaDevice
+public partial class DeviceContext(nint handle, string? deviceName = null)
+    : NativeResource(handle),
+        IGammaDevice
 {
+    private static readonly ConcurrentDictionary<string, bool> ColorSystemDevices = new();
     private int _gammaChannelOffset;
+    private readonly NativeGammaRampApi _api = new(handle);
+    private GammaRampWriter? _writer;
+
+    private GammaRampWriter Writer =>
+        _writer ??= new(_api, deviceName is not null && ColorSystemDevices.ContainsKey(deviceName));
+    public string? FailureReason => Writer.FailureReason;
+    public bool UsesColorSystem => Writer.UsesColorSystem;
 
     private bool SetGammaRamp(GammaRamp ramp)
     {
-        if (!NativeMethods.SetDeviceGammaRamp(Handle, ref ramp))
+        var applied = Writer.Apply(ramp);
+        // Contexts are recreated after wake and display changes. Preserve backend
+        // ownership so a later daytime value cannot leave an old red LUT active.
+        if (Writer.UsesColorSystem && deviceName is not null)
+            ColorSystemDevices[deviceName] = true;
+        if (!applied)
         {
             Debug.WriteLine(
                 $"Failed to set gamma ramp on device context #{Handle}). "
@@ -34,7 +50,23 @@ public partial class DeviceContext(nint handle) : NativeResource(handle), IGamma
         );
     }
 
-    public void ResetGamma() => SetGamma(1, 1, 1);
+    public void ResetGamma()
+    {
+        Writer.Reset();
+        if (deviceName is not null)
+            ColorSystemDevices.TryRemove(deviceName, out _);
+    }
+
+    public string GetDiagnostics()
+    {
+        var gdi = _api.ReadGdi(out var gdiRamp)
+            ? $"R={gdiRamp.Red[255]}, G={gdiRamp.Green[255]}, B={gdiRamp.Blue[255]}"
+            : "indisponível";
+        var color = _api.ReadColorSystem(out var colorRamp)
+            ? $"R={colorRamp.Red[255]}, G={colorRamp.Green[255]}, B={colorRamp.Blue[255]}"
+            : "indisponível";
+        return $"GDI: {gdi}; sistema de cor: {color}; compatibilidade disponível: {_api.IsColorSystemAvailable}";
+    }
 
     protected override void Dispose(bool disposing)
     {
@@ -66,6 +98,6 @@ public partial class DeviceContext
             return null;
         }
 
-        return new DeviceContext(handle);
+        return new DeviceContext(handle, deviceName);
     }
 }

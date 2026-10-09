@@ -47,6 +47,36 @@ internal static class PreviewVerification
                 controls.Displays.First(d => d.Id == internalId).Current.Brightness == 1,
                 $"Internal readout: {controls.Displays.First(d => d.Id == internalId).Current}. Enabled={model.Dashboard.IsEnabled}, paused={model.Dashboard.IsPaused}."
             );
+            var numeric = window
+                .GetVisualDescendants()
+                .OfType<NumericUpDown>()
+                .First(n => n.Name == "TemperatureValue");
+            numeric.SetCurrentValue(NumericUpDown.ValueProperty, 4000m);
+            Require(
+                controls.Temperature == 4000,
+                "Numeric temperature input did not update the profile."
+            );
+            var temperatureSlider = window
+                .GetVisualDescendants()
+                .OfType<Slider>()
+                .First(s => s.Name == "TemperatureSlider");
+            temperatureSlider.SetCurrentValue(Slider.ValueProperty, 500d);
+            Require(controls.Temperature == 500, "Temperature slider did not update the profile.");
+            var brightnessValue = window
+                .GetVisualDescendants()
+                .OfType<NumericUpDown>()
+                .First(n => n.Name == "BrightnessValue");
+            brightnessValue.SetCurrentValue(NumericUpDown.ValueProperty, 40m);
+            Require(
+                controls.Brightness == 40,
+                "Numeric brightness input did not update the profile."
+            );
+            var brightnessSlider = window
+                .GetVisualDescendants()
+                .OfType<Slider>()
+                .First(s => s.Name == "BrightnessSlider");
+            brightnessSlider.SetCurrentValue(Slider.ValueProperty, 15d);
+            Require(controls.Brightness == 15, "Brightness slider did not update the profile.");
             Capture(window, directory, "manual.png");
 
             controls.UseExampleScheduleCommand.Execute(null);

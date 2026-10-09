@@ -48,6 +48,38 @@ public static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        var diagnosticsArgument = Array.Find(
+            args,
+            a => a.StartsWith("--diagnose-displays", StringComparison.OrdinalIgnoreCase)
+        );
+        if (diagnosticsArgument is not null)
+        {
+            var report = new System.Text.StringBuilder();
+            foreach (var monitor in LightBulb.PlatformInterop.Monitor.GetAll())
+            {
+                using (monitor)
+                {
+                    if (monitor.TryGetDisplayInfo() is not { } info)
+                        continue;
+                    using var device = monitor.TryCreateDeviceContext();
+                    report.AppendLine(
+                        $"{info.Name} | {info.DeviceName} | {device?.GetDiagnostics() ?? "contexto indisponível"}"
+                    );
+                }
+            }
+            Console.Write(report);
+            if (
+                diagnosticsArgument.StartsWith(
+                    "--diagnose-displays=",
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+                File.WriteAllText(
+                    diagnosticsArgument["--diagnose-displays=".Length..],
+                    report.ToString()
+                );
+            return 0;
+        }
         if (
             Array.Exists(args, a => a.Equals("--list-displays", StringComparison.OrdinalIgnoreCase))
         )
@@ -67,7 +99,7 @@ public static class Program
         // Ensure only one instance of the app is running at a time
         using var identityMutex = new Mutex(
             true,
-            $"{Name}_Identity{(StartOptions.Current.IsPreview ? "_Preview" : "")}",
+            $"{Name}_Identity{(StartOptions.Current.IsPreview ? "_Preview" : StartOptions.Current.IsDiagnosticInstance ? "_Diagnostic" : "")}",
             out var isOnlyRunningInstance
         );
 

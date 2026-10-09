@@ -4,6 +4,7 @@ namespace LightBulb.PlatformInterop;
 
 public interface IGammaDevice : IDisposable
 {
+    string? FailureReason => null;
     bool SetGamma(double red, double green, double blue);
     void ResetGamma();
 }

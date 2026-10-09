@@ -158,6 +158,7 @@
           <Grid ColumnDefinitions="*,116" RowDefinitions="Auto,Auto,Auto,Auto">
             <TextBlock Text="Temperatura de cor" VerticalAlignment="Center" />
             <NumericUpDown
+              x:Name="TemperatureValue"
               Grid.Column="1"
               Minimum="500"
               Maximum="20000"
@@ -166,6 +167,7 @@
               Value="{Binding Temperature}"
             />
             <Slider
+              x:Name="TemperatureSlider"
               Grid.Row="1"
               Grid.ColumnSpan="2"
               Minimum="500"
@@ -177,6 +179,7 @@
             />
             <TextBlock Grid.Row="2" Text="Brilho" VerticalAlignment="Center" />
             <NumericUpDown
+              x:Name="BrightnessValue"
               Grid.Row="2"
               Grid.Column="1"
               Minimum="1"
@@ -186,6 +189,7 @@
               Value="{Binding Brightness}"
             />
             <Slider
+              x:Name="BrightnessSlider"
               Grid.Row="3"
               Grid.ColumnSpan="2"
               Minimum="1"

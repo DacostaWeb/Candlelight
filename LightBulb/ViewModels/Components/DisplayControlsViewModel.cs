@@ -561,7 +561,12 @@ public partial class DisplayControlsViewModel : ViewModelBase
         DriverStatus =
             _gamma.FailedDisplayIds.Count == 0
                 ? ""
-                : "O driver recusou o controlo de cor de um ecrã. Verifica o HDR e as definições de gama.";
+                : string.Join(
+                    "\n",
+                    _gamma.FailedDisplayIds.Select(id =>
+                        $"{Displays.FirstOrDefault(d => d.Id == id)?.Name ?? id}: {_gamma.FailureReasons.GetValueOrDefault(id, "O Windows não aplicou a cor.")}"
+                    )
+                );
 
     private void QueueSave()
     {

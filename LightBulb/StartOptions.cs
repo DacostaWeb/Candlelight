@@ -9,6 +9,7 @@ namespace LightBulb;
 public partial class StartOptions
 {
     public bool IsPreview { get; init; }
+    public bool IsDiagnosticInstance { get; init; }
     public string? PreviewCaptureDirectory { get; init; }
     public required bool IsInitiallyHidden { get; init; }
 
@@ -28,6 +29,10 @@ public partial class StartOptions
         new()
         {
             IsPreview = commandLineArgs.Contains("--preview", StringComparer.OrdinalIgnoreCase),
+            IsDiagnosticInstance = commandLineArgs.Contains(
+                "--diagnostic-instance",
+                StringComparer.OrdinalIgnoreCase
+            ),
             PreviewCaptureDirectory = commandLineArgs.Contains(
                 "--preview",
                 StringComparer.OrdinalIgnoreCase
