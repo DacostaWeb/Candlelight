@@ -13,6 +13,14 @@ public class GammaServiceSpecs
         public List<GammaColor> Writes { get; } = [];
         public int Resets { get; private set; }
         public bool Succeeds { get; set; } = true;
+        public bool KeepCurrent { get; set; }
+        public int Verifications { get; private set; }
+
+        public bool EnsureGamma(double red, double green, double blue)
+        {
+            Verifications++;
+            return KeepCurrent || SetGamma(red, green, blue);
+        }
 
         public bool SetGamma(double red, double green, double blue)
         {
@@ -107,6 +115,31 @@ public class GammaServiceSpecs
         Assert.Throws<InvalidOperationException>(() => service.Recover());
         service.RecoveryRequested -= fail;
         service.SetGamma(new(2700, 1));
+        Assert.Single(device.Writes);
+    }
+
+    [Fact]
+    public void Wake_checks_a_surviving_filter_without_writing_but_explicit_reapply_still_writes()
+    {
+        long now = 10000;
+        var device = new Device();
+        using var service = new GammaService(
+            new SettingsService(),
+            () => [Context("internal", device)],
+            () => now,
+            false
+        );
+        service.SetGamma(new(2700, 1));
+        device.Writes.Clear();
+        device.KeepCurrent = true;
+        service.OnDisplayState(1);
+        var checks = device.Verifications;
+        Assert.Empty(device.Writes);
+        now += 50;
+        service.RecoveryTick();
+        Assert.Empty(device.Writes);
+        Assert.Equal(checks + 1, device.Verifications);
+        service.Recover();
         Assert.Single(device.Writes);
     }
 

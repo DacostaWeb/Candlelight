@@ -53,12 +53,27 @@ Version 0.1.2 removes redundant operations in this path. Target recalculation
 queues the request and recovery writes it once, instead of twice immediately.
 The color-system path reads GDI first and leaves an already neutral LUT untouched;
 if neutralization is needed, it occurs after installing the desired filter and is
-verified. The color filter is still refreshed during the five-second recovery
-window because driver state can change independently of cached LUT readback.
+verified. In this version the color filter is refreshed during the five-second
+recovery window because driver state can change independently of cached LUT readback.
 The bounded `ColorStatus.txt` now records power-event sources and each recovery
 write's before/after RGB values, whether GDI needed neutralizing, and call duration.
 These changes require a new physical suspension test before claiming the flash
 is resolved.
+
+The repeat test of 0.1.2 still produced the flash, on the unlocked desktop.
+Its recovery trace recorded 92 writes, all with the warm target already present
+before the write, GDI identity retained, and successful warm readback afterwards.
+The first write took 379.9 ms. This does not prove which component caused the
+visible frame: LUT readback may not expose every transient in the display pipeline.
+The next diagnostic build verifies both LUT layers before an automatic update
+and only writes on mismatch or unreadable state. Explicit **Reaplicar** still
+forces a write. The repeat physical test still produced the flash on the desktop.
+There were 99 recovery checks: the first found an already neutral color-system
+LUT (65535/65535/65535) and restored the warm target in 265.1 ms; the remaining
+98 checks found the correct target and performed no writes. This supports an
+external color reset preceding Candlelight's correction, although it does not
+identify the responsible Windows/driver component. Avoiding unnecessary writes
+remains useful, but is not a demonstrated fix for this resume flash.
 
 No real hibernation or USB-C reconnection test has been performed. The OLED was
 subsequently disconnected. The production C# `DeviceContext` was
@@ -87,6 +102,15 @@ frame on this hardware and does not introduce an extra gamma reset on handover.
 Automation would need version-aware CloudStore decoding, preservation of unknown
 fields, and restoration of the user's original state instead of forcing it off.
 The existing Night Light strength and schedule should remain untouched.
+
+On this Windows 11 build 26200 device, a diagnostic-only strict Bond v1 codec
+successfully round-tripped the existing state and rejected unknown schemas and
+truncated data before any registry write. Original state/settings blobs were
+backed up locally. Only the state was changed from off to on; the strength and
+disabled schedule were left untouched. With Candlelight stopped, readback changed
+to R=65535, G=18739, B=0, showing that Night Light uses the same color-system LUT
+on this device. A separate physical suspension test of Night Light is pending.
+The diagnostic switch is not installed as an automatic application feature.
 
 Sources:
 

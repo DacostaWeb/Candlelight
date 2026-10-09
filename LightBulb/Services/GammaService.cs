@@ -255,7 +255,7 @@ public sealed class GammaService : IDisposable
             {
                 if (_isDisposed || !_hasRequest || _displayOff)
                     return;
-                Apply(true);
+                Apply(true, reason != "requested");
                 if (_settings.IsWakeRecoveryEnabled)
                 {
                     _recoveryDeadline = _clock() + 5000;
@@ -311,7 +311,7 @@ public sealed class GammaService : IDisposable
         }
     }
 
-    private void Apply(bool force)
+    private void Apply(bool force, bool verifyBeforeWrite = true)
     {
         EnsureContexts();
         var now = _clock();
@@ -353,10 +353,12 @@ public sealed class GammaService : IDisposable
                 updated = true;
                 var color = GammaColor.FromConfiguration(config);
                 var started = Stopwatch.GetTimestamp();
-                var applied = context.Device.SetGamma(color.Red, color.Green, color.Blue);
-                if (force)
+                var applied = verifyBeforeWrite
+                    ? context.Device.EnsureGamma(color.Red, color.Green, color.Blue)
+                    : context.Device.SetGamma(color.Red, color.Green, color.Blue);
+                if (force || context.Device.DidWriteGamma is true)
                     Diagnostics.ColorTrace.Write(
-                        $"Recovery apply [{context.Info.Name}]: {config}; {context.Device.ApplyDiagnostics}; success={applied}; {Stopwatch.GetElapsedTime(started).TotalMilliseconds:F1} ms"
+                        $"Color {(force ? "recovery" : "update")} [{context.Info.Name}]: {config}; {context.Device.ApplyDiagnostics}; write={context.Device.DidWriteGamma}; success={applied}; {Stopwatch.GetElapsedTime(started).TotalMilliseconds:F1} ms"
                     );
                 if (applied)
                     _applied[context.Info.Id] = config;

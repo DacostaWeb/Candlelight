@@ -14,6 +14,8 @@ public class GammaRampWriterSpecs
         public bool IgnoreGdiWrite { get; set; }
         public bool IgnoreColorWrite { get; set; }
         public bool RejectColorWrite { get; set; }
+        public bool CanReadColor { get; set; } = true;
+        public bool CanReadGdi { get; set; } = true;
         public GammaRamp Gdi { get; private set; } = GammaRamp.Identity();
         public GammaRamp Color { get; private set; } = GammaRamp.Identity();
         public List<string> Writes { get; } = [];
@@ -33,7 +35,7 @@ public class GammaRampWriterSpecs
         public bool ReadGdi(out GammaRamp ramp)
         {
             ramp = Gdi;
-            return true;
+            return CanReadGdi;
         }
 
         public bool WriteColorSystem(ref GammaRamp ramp)
@@ -49,7 +51,7 @@ public class GammaRampWriterSpecs
         public bool ReadColorSystem(out GammaRamp ramp)
         {
             ramp = Color;
-            return true;
+            return CanReadColor;
         }
     }
 
@@ -125,6 +127,92 @@ public class GammaRampWriterSpecs
         Assert.Equal(100, api.Writes.Count);
         Assert.All(api.Writes, operation => Assert.Equal("color", operation));
         Assert.Contains("GDI identity kept", writer.LastOperation);
+    }
+
+    [Fact]
+    public void A_matching_gdi_ramp_is_verified_without_a_write()
+    {
+        var api = new Api();
+        var warm = GammaRamp.Create(1, 0.8, 0.6, 0);
+        api.WriteGdi(ref warm);
+        api.Writes.Clear();
+        var writer = new GammaRampWriter(api);
+        Assert.True(writer.IsCurrent(warm));
+        Assert.False(writer.DidWrite);
+        Assert.False(writer.UsesColorSystem);
+        Assert.Empty(api.Writes);
+    }
+
+    [Fact]
+    public void A_surviving_color_filter_is_verified_without_reprogramming_either_layer()
+    {
+        var api = new Api();
+        var red = GammaRamp.Create(0.15, 0, 0, 0);
+        api.WriteColorSystem(ref red);
+        api.Writes.Clear();
+        var writer = new GammaRampWriter(api);
+        for (var i = 0; i < 100; i++)
+            Assert.True(writer.IsCurrent(red));
+        Assert.Empty(api.Writes);
+        Assert.False(writer.DidWrite);
+        Assert.True(writer.UsesColorSystem);
+        // Verifying a preexisting filter still takes responsibility for exit reset.
+        writer.Reset();
+        Assert.True(GammaRamp.Identity().Matches(api.Color));
+    }
+
+    [Fact]
+    public void Matching_color_with_an_extra_gdi_filter_requires_repair()
+    {
+        var api = new Api();
+        var red = GammaRamp.Create(0.15, 0, 0, 0);
+        var extraGamma = GammaRamp.Create(1, 0.8, 0.6, 0);
+        api.WriteColorSystem(ref red);
+        api.WriteGdi(ref extraGamma);
+        api.Writes.Clear();
+        var writer = new GammaRampWriter(api);
+        Assert.False(writer.IsCurrent(red));
+        Assert.Empty(api.Writes);
+        Assert.True(writer.Apply(red));
+        Assert.Equal(["color", "gdi"], api.Writes);
+    }
+
+    [Fact]
+    public void Matching_gdi_cannot_hide_a_different_color_filter()
+    {
+        var api = new Api();
+        var warm = GammaRamp.Create(1, 0.8, 0.6, 0);
+        var red = GammaRamp.Create(0.15, 0, 0, 0);
+        api.WriteGdi(ref warm);
+        api.WriteColorSystem(ref red);
+        var writer = new GammaRampWriter(api);
+        Assert.False(writer.IsCurrent(warm));
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void An_unreadable_layer_cannot_be_assumed_correct(bool readColor, bool readGdi)
+    {
+        var api = new Api();
+        var red = GammaRamp.Create(0.15, 0, 0, 0);
+        api.WriteColorSystem(ref red);
+        api.CanReadColor = readColor;
+        api.CanReadGdi = readGdi;
+        var writer = new GammaRampWriter(api, true);
+        Assert.False(writer.IsCurrent(red));
+    }
+
+    [Fact]
+    public void Red_only_verification_detects_even_one_nonzero_blue_entry()
+    {
+        var api = new Api();
+        var expected = GammaRamp.Create(0.15, 0, 0, 0);
+        var actual = GammaRamp.Create(0.15, 0, 0, 0);
+        actual.Blue[100] = 1;
+        api.WriteColorSystem(ref actual);
+        var writer = new GammaRampWriter(api);
+        Assert.False(writer.IsCurrent(expected));
     }
 
     [Fact]

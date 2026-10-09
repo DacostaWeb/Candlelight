@@ -18,11 +18,11 @@ public partial class DeviceContext(nint handle, string? deviceName = null)
         _writer ??= new(_api, deviceName is not null && ColorSystemDevices.ContainsKey(deviceName));
     public string? FailureReason => Writer.FailureReason;
     public string? ApplyDiagnostics => Writer.LastOperation;
+    public bool? DidWriteGamma => Writer.DidWrite;
     public bool UsesColorSystem => Writer.UsesColorSystem;
 
-    private bool SetGammaRamp(GammaRamp ramp)
+    private bool RememberResult(bool applied)
     {
-        var applied = Writer.Apply(ramp);
         // Contexts are recreated after wake and display changes. Preserve backend
         // ownership so a later daytime value cannot leave an old red LUT active.
         if (Writer.UsesColorSystem && deviceName is not null)
@@ -46,10 +46,23 @@ public partial class DeviceContext(nint handle, string? deviceName = null)
         // In order to work around this, we add a small random deviation to each ramp to make sure
         // they're always unique, forcing the drivers to refresh the device context every time.
         _gammaChannelOffset = ++_gammaChannelOffset % 5;
-        return SetGammaRamp(
-            GammaRamp.Create(redMultiplier, greenMultiplier, blueMultiplier, _gammaChannelOffset)
+        return RememberResult(
+            Writer.Apply(
+                GammaRamp.Create(
+                    redMultiplier,
+                    greenMultiplier,
+                    blueMultiplier,
+                    _gammaChannelOffset
+                )
+            )
         );
     }
+
+    public bool EnsureGamma(double redMultiplier, double greenMultiplier, double blueMultiplier) =>
+        Writer.IsCurrent(GammaRamp.Create(redMultiplier, greenMultiplier, blueMultiplier, 0))
+            ? RememberResult(true)
+            // Keep the refresh-offset workaround when an actual write is needed.
+            : SetGamma(redMultiplier, greenMultiplier, blueMultiplier);
 
     public void ResetGamma()
     {

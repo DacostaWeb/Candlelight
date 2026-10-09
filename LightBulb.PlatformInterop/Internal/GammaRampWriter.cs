@@ -14,10 +14,43 @@ internal sealed class GammaRampWriter(IGammaRampApi api, bool useColorSystem = f
     public bool UsesColorSystem { get; private set; } = useColorSystem;
     public string? FailureReason { get; private set; }
     public string LastOperation { get; private set; } = "";
+    public bool DidWrite { get; private set; }
+
+    public bool IsCurrent(GammaRamp ramp)
+    {
+        FailureReason = null;
+        DidWrite = false;
+        var identity = GammaRamp.Identity();
+        var color = default(GammaRamp);
+        var colorReadable = api.IsColorSystemAvailable && api.ReadColorSystem(out color);
+        var activeColorLayer = colorReadable && !identity.Matches(color);
+        var gdiReadable = api.ReadGdi(out var gdi);
+        LastOperation =
+            $"color current={Summary(colorReadable, color)}; GDI current={Summary(gdiReadable, gdi)}";
+
+        if (UsesColorSystem || activeColorLayer)
+        {
+            if (!colorReadable || !ramp.Matches(color) || !gdiReadable || !identity.Matches(gdi))
+                return false;
+            // A matching filter may have survived a prior process. Own its reset
+            // even when this process did not need to rewrite it.
+            UsesColorSystem = true;
+        }
+        else if (
+            (api.IsColorSystemAvailable && !colorReadable)
+            || !gdiReadable
+            || !ramp.Matches(gdi)
+        )
+            return false;
+
+        LastOperation += "; verified; write skipped";
+        return true;
+    }
 
     public bool Apply(GammaRamp ramp)
     {
         FailureReason = null;
+        DidWrite = true;
         // The LUT can outlive a process or have been applied by a diagnostic
         // helper. GDI readback alone cannot see that independent color layer.
         var existingColor = default(GammaRamp);
