@@ -1,10 +1,12 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using LightBulb.Core;
@@ -126,9 +128,72 @@ internal static class PreviewVerification
             await Task.Delay(100);
             Capture(window, directory, "day-night.png");
             controls.SaveNow();
+            var protection = window
+                .GetVisualDescendants()
+                .OfType<ToggleSwitch>()
+                .Single(toggle => toggle.Name == "WakeProtectionSwitch");
+            protection.SetCurrentValue(ToggleSwitch.IsCheckedProperty, false);
+            Require(
+                !controls.IsNightLightProtectionEnabled,
+                "Wake protection toggle did not update the setting."
+            );
+            protection.SetCurrentValue(ToggleSwitch.IsCheckedProperty, true);
+            Require(
+                controls.IsNightLightProtectionEnabled,
+                "Wake protection toggle did not enable the setting."
+            );
+            var shield = Services.BlackoutCover.CreateWindow();
+            try
+            {
+                shield.Width = 240;
+                shield.Height = 160;
+                shield.Position = window.Position + new PixelPoint(40, 40);
+                shield.Show();
+                await Task.Delay(150);
+                Require(
+                    !shield.ShowInTaskbar
+                        && !shield.ShowActivated
+                        && shield.Topmost
+                        && shield.WindowDecorations == WindowDecorations.None,
+                    "The protection cover is not a borderless, non-activating topmost window."
+                );
+                using var rendered = new RenderTargetBitmap(
+                    new PixelSize(240, 160),
+                    new Vector(96, 96)
+                );
+                rendered.Render(shield);
+                rendered.Save(
+                    Path.Combine(directory, "blackout.png"),
+                    PngBitmapEncoderOptions.Default
+                );
+                using var copy = new WriteableBitmap(
+                    new PixelSize(240, 160),
+                    new Vector(96, 96),
+                    PixelFormat.Bgra8888,
+                    AlphaFormat.Opaque
+                );
+                using var pixels = copy.Lock();
+                rendered.CopyPixels(pixels);
+                var bytes = new byte[pixels.RowBytes * 160];
+                Marshal.Copy(pixels.Address, bytes, 0, bytes.Length);
+                for (var y = 0; y < 160; y++)
+                for (var x = 0; x < 240; x++)
+                {
+                    var offset = y * pixels.RowBytes + x * 4;
+                    Require(
+                        bytes[offset] == 0 && bytes[offset + 1] == 0 && bytes[offset + 2] == 0,
+                        "The protection cover rendered a nonblack pixel."
+                    );
+                }
+            }
+            finally
+            {
+                shield.Close();
+            }
+            controls.SaveNow();
             File.WriteAllText(
                 Path.Combine(directory, "verification.txt"),
-                "PASS: compiled preset button binding; per-monitor isolation; schedule generation; invalid time validation; manual preset with invalid schedule; correction; bound row deletion; custom preset save/delete; switching monitors; settings save.\n"
+                "PASS: compiled preset button binding; per-monitor isolation; schedule generation; invalid time validation; manual preset with invalid schedule; correction; bound row deletion; custom preset save/delete; switching monitors; settings save; wake protection toggle; opaque black cover.\n"
             );
             App.Shutdown();
         }

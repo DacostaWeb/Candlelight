@@ -43,6 +43,7 @@ public partial class App : Application, IDisposable
         services.AddSingleton<ExternalApplicationService>();
         services.AddSingleton<LocalizationManager>();
         services.AddSingleton<GammaService>();
+        services.AddSingleton<WakeProtectionService>();
         services.AddSingleton<HotKeyService>();
         services.AddSingleton<SettingsService>();
         services.AddSingleton<UpdateService>();
@@ -109,6 +110,7 @@ public partial class App : Application, IDisposable
     {
         // Load settings
         _settingsService.Load();
+        _services.GetRequiredService<WakeProtectionService>().Initialize();
         Diagnostics.ColorTrace.Write(
             $"Start {Program.VersionString}; settings={StartOptions.Current.SettingsPath}; profiles={_settingsService.DisplayProfiles.Count}"
         );
@@ -232,6 +234,10 @@ public partial class App : Application, IDisposable
         _isDisposed = true;
 
         _eventSubscription.Dispose();
+        // Remove Candlelight's LUT before restoring the user's original Night
+        // Light state, so disposal cannot erase that restored Windows filter.
+        _services.GetRequiredService<GammaService>().Dispose();
+        _services.GetRequiredService<WakeProtectionService>().Dispose();
         _services.Dispose();
     }
 }

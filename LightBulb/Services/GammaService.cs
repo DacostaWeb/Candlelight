@@ -33,6 +33,7 @@ public sealed class GammaService : IDisposable
     private bool _isDisposed;
     private bool _displayOff;
     private bool _hasRequest;
+    private bool _protectedHandover;
     private long _recoveryDeadline;
     private long _handoverDeadline;
     private long _lastInvalidation;
@@ -102,7 +103,11 @@ public sealed class GammaService : IDisposable
                     PowerSettingNotification.Ids.PowerSavingStatusChanged,
                     InvalidateGamma
                 ) ?? Disposable.Null,
-                ResumeNotification.Register(() => Recover("resume/session")),
+                ResumeNotification.Register(
+                    () => Recover("resume/session"),
+                    () => OnDisplayState(0, "suspend"),
+                    locked => SessionLockChanged?.Invoke(locked)
+                ),
                 SystemEvent.Register(
                     SystemEvent.Ids.DisplayChanged,
                     () => Recover("display change")
@@ -117,6 +122,9 @@ public sealed class GammaService : IDisposable
     public event Action? RecoveryRequested;
     public event Action? DisplaysChanged;
     public event Action? ApplyStatusChanged;
+    public event Action? SleepTransitionRequested;
+    public event Action? WakeTransitionRequested;
+    public event Action<bool>? SessionLockChanged;
     public IReadOnlyList<string> FailedDisplayIds { get; private set; } = [];
     public IReadOnlyDictionary<string, string> FailureReasons { get; private set; } =
         new Dictionary<string, string>();
@@ -244,8 +252,12 @@ public sealed class GammaService : IDisposable
                 _recoveryDeadline = 0;
                 _handoverDeadline = 0;
                 _recoveryTimer.Change(Timeout.Infinite, Timeout.Infinite);
-                return;
             }
+        }
+        if (state == 0)
+        {
+            SleepTransitionRequested?.Invoke();
+            return;
         }
         Recover($"{source} power={state}");
     }
@@ -254,11 +266,13 @@ public sealed class GammaService : IDisposable
 
     private void Recover(string reason)
     {
+        bool wasProtectedHandover;
         lock (_sync)
         {
             if (_isDisposed || _isUpdating || _isRecovering)
                 return;
             _isRecovering = true;
+            wasProtectedHandover = _protectedHandover;
             _displayOff = false;
             _contextsValid = false;
             _lastInvalidation = _clock();
@@ -270,6 +284,8 @@ public sealed class GammaService : IDisposable
             // Recompute targets first. SetGamma queues them during this callback,
             // so the first recovery write is not immediately duplicated.
             RecoveryRequested?.Invoke();
+            if (reason != "requested" || _protectedHandover)
+                WakeTransitionRequested?.Invoke();
             lock (_sync)
             {
                 if (_isDisposed || !_hasRequest || _displayOff)
@@ -279,6 +295,7 @@ public sealed class GammaService : IDisposable
                     _handoverDeadline = 0;
                 else if (
                     _settings.IsWakeRecoveryEnabled
+                    && !_protectedHandover
                     && _recoveryDeadline <= now
                     && _nightLightActive()
                 )
@@ -288,7 +305,7 @@ public sealed class GammaService : IDisposable
                     _handoverDeadline = now + 1500;
                     Diagnostics.ColorTrace.Write("Night Light wake handover: wait 1500 ms");
                 }
-                if (now >= _handoverDeadline)
+                if (!wasProtectedHandover && !_protectedHandover && now >= _handoverDeadline)
                     Apply(true, reason != "requested");
                 if (_settings.IsWakeRecoveryEnabled)
                 {
@@ -320,7 +337,7 @@ public sealed class GammaService : IDisposable
                 _recoveryTimer.Change(Timeout.Infinite, Timeout.Infinite);
                 return;
             }
-            if (_clock() < _handoverDeadline)
+            if (_protectedHandover || _clock() < _handoverDeadline)
                 return;
             Apply(true);
         }
@@ -339,7 +356,14 @@ public sealed class GammaService : IDisposable
             return;
         try
         {
-            if (_isDisposed || !_hasRequest || _displayOff || _isUpdating || _isRecovering)
+            if (
+                _isDisposed
+                || !_hasRequest
+                || _displayOff
+                || _protectedHandover
+                || _isUpdating
+                || _isRecovering
+            )
                 return;
             var now = _clock();
             if (
@@ -369,8 +393,49 @@ public sealed class GammaService : IDisposable
             _hasRequest = true;
             _fallback = fallback;
             _requested = configurations ?? new Dictionary<string, ColorConfiguration>();
-            if (!_displayOff && !_isRecovering && _clock() >= _handoverDeadline)
+            if (
+                !_displayOff
+                && !_protectedHandover
+                && !_isRecovering
+                && _clock() >= _handoverDeadline
+            )
                 Apply(false);
+        }
+    }
+
+    public void SetProtectedHandover(bool active)
+    {
+        lock (_sync)
+        {
+            _protectedHandover = active;
+            _handoverDeadline = 0;
+        }
+    }
+
+    public bool ApplyProtectedProfile()
+    {
+        lock (_sync)
+        {
+            if (_isDisposed || _displayOff || !_hasRequest)
+                return false;
+            _contextsValid = false;
+            // A stored LUT may match even when scanout has not caught up.
+            // Force a fresh write while the desktop is covered.
+            Apply(true, false);
+            return _contexts.Count > 0 && FailedDisplayIds.Count == 0;
+        }
+    }
+
+    public void ReportProtectionFailure(string reason)
+    {
+        lock (_sync)
+        {
+            FailedDisplayIds = _displays.Select(display => display.Id).ToArray();
+            FailureReasons = _displays.ToDictionary(
+                display => display.Id,
+                _ => "Proteção: " + reason + " Usa Reaplicar agora para tentar novamente."
+            );
+            ApplyStatusChanged?.Invoke();
         }
     }
 

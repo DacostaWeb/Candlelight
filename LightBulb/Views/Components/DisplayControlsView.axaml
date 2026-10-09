@@ -79,9 +79,16 @@
             Content="Reforçar a reposição"
             FontSize="13"
           />
+          <TextBlock Classes="caption" Text="Verifica e recupera a cor após a retoma." />
+          <ToggleSwitch
+            x:Name="WakeProtectionSwitch"
+            IsChecked="{Binding IsNightLightProtectionEnabled}"
+            Content="Pausa a preto"
+            FontSize="13"
+          />
           <TextBlock
             Classes="caption"
-            Text="Repõe imediatamente a cor e insiste durante 5 segundos após a retoma."
+            Text="Usa a Luz noturna na suspensão e cobre os ecrãs durante a reposição, cerca de 1–2 segundos."
           />
           <Button
             Command="{Binding ReapplyCommand}"

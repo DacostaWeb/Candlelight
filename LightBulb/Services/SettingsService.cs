@@ -76,6 +76,9 @@ public partial class SettingsService()
     public partial bool IsWakeRecoveryEnabled { get; set; } = true;
 
     [ObservableProperty]
+    public partial bool IsNightLightProtectionEnabled { get; set; } = true;
+
+    [ObservableProperty]
     public partial TimeSpan ConfigurationTransitionDuration { get; set; } =
         TimeSpan.FromMinutes(40);
 

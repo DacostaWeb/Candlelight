@@ -162,6 +162,9 @@ public partial class DisplayControlsViewModel : ViewModelBase
     [ObservableProperty]
     public partial bool IsWakeRecoveryEnabled { get; set; } = true;
 
+    [ObservableProperty]
+    public partial bool IsNightLightProtectionEnabled { get; set; } = true;
+
     public string PreviewNotice =>
         StartOptions.Current.IsPreview ? "Pré-visualização · os ecrãs não são alterados" : "";
 
@@ -171,6 +174,7 @@ public partial class DisplayControlsViewModel : ViewModelBase
             return;
         _initialized = true;
         IsWakeRecoveryEnabled = _settings.IsWakeRecoveryEnabled;
+        IsNightLightProtectionEnabled = _settings.IsNightLightProtectionEnabled;
         RefreshPresets();
         RefreshDisplays();
     }
@@ -264,6 +268,7 @@ public partial class DisplayControlsViewModel : ViewModelBase
         try
         {
             IsWakeRecoveryEnabled = _settings.IsWakeRecoveryEnabled;
+            IsNightLightProtectionEnabled = _settings.IsNightLightProtectionEnabled;
             foreach (var point in Schedule)
                 point.PropertyChanged -= ScheduleChanged;
             Schedule.Clear();
@@ -299,6 +304,12 @@ public partial class DisplayControlsViewModel : ViewModelBase
         if (args.PropertyName == nameof(IsWakeRecoveryEnabled))
         {
             _settings.IsWakeRecoveryEnabled = IsWakeRecoveryEnabled;
+            _dirty = true;
+            QueueSave();
+        }
+        else if (args.PropertyName == nameof(IsNightLightProtectionEnabled))
+        {
+            _settings.IsNightLightProtectionEnabled = IsNightLightProtectionEnabled;
             _dirty = true;
             QueueSave();
         }

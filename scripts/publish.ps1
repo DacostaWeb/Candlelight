@@ -15,6 +15,6 @@ Copy-Item -LiteralPath (Join-Path $projectRoot 'License.txt'), (Join-Path $proje
 $docsDir = Join-Path $outputDir 'docs'
 New-Item -ItemType Directory -Path $docsDir -Force | Out-Null
 Copy-Item -Path (Join-Path $projectRoot 'docs/*') -Destination $docsDir -Recurse -Force
-$packageFiles = Get-ChildItem -LiteralPath $outputDir | Where-Object { $_.Name -notin @('Settings.json', 'ColorStatus.txt', '.installed') }
+$packageFiles = Get-ChildItem -LiteralPath $outputDir | Where-Object { $_.Name -notin @('Settings.json', 'ColorStatus.txt', 'NightLightGuard.state', 'NightLightGuard.state.tmp', '.installed') }
 Compress-Archive -LiteralPath $packageFiles.FullName -DestinationPath $zipPath -Force
 Write-Output $zipPath

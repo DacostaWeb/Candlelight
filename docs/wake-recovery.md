@@ -94,14 +94,10 @@ application alone. Check gamma on each display again after reconnecting.
 
 ## Night Light as an additional guard
 
-The proposed sequence is to arm Night Light before suspension or lid-close,
-reapply Candlelight on wake, then restore the previous Night Light state and
-reapply Candlelight again. It remains an experimental candidate, not part of
-the current release. It must first be established that Night Light covers the earliest visible
-frame on this hardware and does not introduce an extra gamma reset on handover.
-Automation would need version-aware CloudStore decoding, preservation of unknown
-fields, and restoration of the user's original state instead of forcing it off.
-The existing Night Light strength and schedule should remain untouched.
+The proposed sequence arms Night Light before suspension or lid-close and
+hands the color pipeline back to Candlelight on wake. The following hardware
+tests established the need to hide that handover as well as guard the first frame.
+Night Light strength and schedule remain untouched.
 
 On this Windows 11 build 26200 device, a diagnostic-only strict Bond v1 codec
 successfully round-tripped the existing state and rejected unknown schemas and
@@ -136,6 +132,54 @@ Night Light strength, schedule or state. Tests cover hidden-window-independent
 repair, display-off, queued changes, handover timing and malformed state blobs.
 The fixed delay is a hardware test candidate, not a guarantee that every Windows
 driver completes its transition in that time. Physical retesting is required.
+
+The physical retest of 0.1.3 still produced orange → red → orange during wake.
+The user suspected Candlelight had stopped applying while hidden. A separate
+read-only diagnostic taken with its window still closed showed the requested
+2700 K LUT (65026/42514/22289) and exact GDI identity; the recovery checks also
+reported that target. This establishes the stored LUT, not the final displayed
+color or every transform in Windows' display pipeline. It is insufficient to
+claim that leaving Night Light logically on does not compound filters.
+The next approach restores the original proposal: Night Light on during sleep,
+off during normal Candlelight use, followed by an explicit profile write. A
+brief opaque black cover during handover protects the off transition; the user
+explicitly chose that visible delay over keeping the image visible.
+
+## Protected handover in 0.1.4
+
+Display-off and suspend notifications synchronously arm Night Light and prepare
+one opaque, borderless, non-activating topmost cover for every connected screen.
+During wake, ordinary gamma writes and background verification pause. The
+covers get 250 ms to paint, Night Light is switched off, Windows gets 900 ms to
+complete its transition, and current per-monitor profiles are explicitly written
+twice, 250 ms apart. Only then are the covers removed. A typical successful
+handover takes about 1.5 seconds; the actual driver duration can vary. Duplicate
+wake notifications coalesce. A new suspension cancels the old handover without
+uncovering the desktop. Session lock keeps the Windows fallback active until
+unlock; app-owned covers cannot obscure the secure desktop itself.
+
+The strict CloudStore codec changes only the active state, manual-transition
+timestamp and enclosing freshness timestamp. Known unrelated state fields are
+retained byte-for-byte; unknown schemas or fields cause a refusal to write.
+The original active state is saved before taking ownership, with an atomic local
+`NightLightGuard.state` recovery token. Normal exit resets Candlelight before
+restoring that original Night Light state. A restart after a crash reuses the
+token rather than mistaking the temporary guard for a user preference. The token
+and user settings are excluded from portable archives.
+
+If a handover fails, Night Light is rearmed and the cover is released with a warm
+fallback. Gamma stays paused to avoid compounding that fallback; **Reaplicar
+agora** retries the protected handover and the UI reports the reason. A five-second
+cancellation bounds ordinary failures. If a stuck UI still has an awake cover
+after eight seconds, an independent fail-safe rearms Night Light and terminates
+only Candlelight so Windows removes its windows. No timeout runs while asleep.
+The **Pausa a preto** toggle disables this additional protection.
+
+Tests cover ordering, hidden-window operation, duplicate wake messages, a new
+sleep during handover, write failures, retries, state restoration, session lock
+and the fail-safe. The compiled UI preview verifies the toggle and renders the
+cover, checking every pixel is black without changing real monitor colors.
+Real suspension, hibernation and OLED reconnection still require physical tests.
 The diagnostic switch is not installed as an automatic application feature.
 
 Sources:

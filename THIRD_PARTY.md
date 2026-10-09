@@ -10,6 +10,8 @@ revision `5d834427dc1094d38b619cc14198d58a6769814a`, under the same MIT license.
 Candlelight uses smaller update thresholds for precise monitor controls while
 preserving Ahead's forced updates at quantized zero-channel boundaries.
 
-The original C# read-only Night Light detector uses the reverse-engineered
+The original C# Night Light state controller uses the reverse-engineered
 [CloudStore format documented by win-nightlight-cli](https://github.com/kvnxiao/win-nightlight-cli/blob/main/docs/nightlight-registry-format.md)
-as a schema reference. It does not modify Windows Night Light preferences.
+as a schema reference. It preserves the strength and schedule and only changes
+the active state during protected handovers, restoring the original active
+state on exit. Unknown state schemas are never rewritten.

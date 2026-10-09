@@ -1,12 +1,14 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Security;
 using Microsoft.Win32;
 
 namespace LightBulb.PlatformInterop;
 
-// Read-only detection of the known Windows 11 CloudStore schema. Unknown
-// schemas are left alone; this class never changes Night Light preferences.
+// Strict support for the known Windows 11 CloudStore state schema. Unknown
+// schemas are left alone. Strength and schedule settings are never written.
 public static class NightLight
 {
     private const string StatePath =
@@ -26,7 +28,93 @@ public static class NightLight
         }
     }
 
+    private sealed record State(
+        ulong Modified,
+        bool Active,
+        bool Usable,
+        SortedDictionary<int, byte[]> Fields
+    );
+
     internal static bool? DecodeActive(byte[] bytes)
+    {
+        var state = DecodeState(bytes);
+        return state is null ? null : state.Active && state.Usable;
+    }
+
+    // Returning false never means success: callers keep their protection in
+    // place if Windows rejects the change or exposes an unsupported schema.
+    public static bool TrySetActive(bool active)
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(StatePath, true);
+            if (key?.GetValue("Data") is not byte[] before)
+                return false;
+            var updated = RewriteActive(before, active, DateTimeOffset.UtcNow);
+            if (updated is null)
+                return false;
+            if (before.SequenceEqual(updated))
+                return true;
+            // Avoid overwriting a concurrent Windows scheduler change.
+            if (key.GetValue("Data") is not byte[] latest || !before.SequenceEqual(latest))
+                return false;
+            key.SetValue("Data", updated, RegistryValueKind.Binary);
+            return key.GetValue("Data") is byte[] actual && DecodeActive(actual) == active;
+        }
+        catch (Exception error)
+            when (error is IOException or UnauthorizedAccessException or SecurityException)
+        {
+            return false;
+        }
+    }
+
+    internal static byte[]? RewriteActive(byte[] bytes, bool active, DateTimeOffset now)
+    {
+        var state = DecodeState(bytes);
+        if (
+            state is null
+            || !state.Usable
+            || state.Modified > ulong.MaxValue - 2
+            || now < DateTimeOffset.UnixEpoch
+        )
+            return null;
+        if (state.Active == active)
+            return bytes;
+        if (active)
+            state.Fields[0] = [0x10, 0];
+        else
+            state.Fields.Remove(0);
+        state.Fields[10] = [0xD0, 10, 2]; // Manual transition, ZigZag(1).
+        using var timeField = new MemoryStream();
+        using (var writer = new BinaryWriter(timeField, System.Text.Encoding.UTF8, true))
+        {
+            writer.Write(new byte[] { 0xC6, 20 });
+            WriteVarint(writer, (ulong)now.UtcDateTime.ToFileTimeUtc());
+        }
+        state.Fields[20] = timeField.ToArray();
+        using var inner = new MemoryStream();
+        using (var writer = new BinaryWriter(inner, System.Text.Encoding.UTF8, true))
+        {
+            writer.Write(new byte[] { 0x43, 0x42, 1, 0 });
+            foreach (var field in state.Fields.Values)
+                writer.Write(field);
+            writer.Write((byte)0);
+        }
+        using var outer = new MemoryStream();
+        using (var writer = new BinaryWriter(outer, System.Text.Encoding.UTF8, true))
+        {
+            writer.Write(new byte[] { 0x43, 0x42, 1, 0, 0x0A, 0x02, 1, 0, 0x2A, 0x06 });
+            WriteVarint(writer, Math.Max((ulong)now.ToUnixTimeSeconds(), state.Modified + 2));
+            writer.Write(new byte[] { 0x2A, 0x2B, 0x0E });
+            WriteVarint(writer, (ulong)inner.Length);
+            writer.Write(inner.ToArray());
+            writer.Write(new byte[] { 0, 0, 0 });
+        }
+        var result = outer.ToArray();
+        return DecodeActive(result) == active ? result : null;
+    }
+
+    private static State? DecodeState(byte[] bytes)
     {
         try
         {
@@ -35,7 +123,7 @@ public static class NightLight
             using var stream = new MemoryStream(bytes, false);
             using var reader = new BinaryReader(stream);
             Expect(reader, 0x43, 0x42, 1, 0, 0x0A, 0x02, 1, 0, 0x2A, 0x06);
-            ReadVarint(reader);
+            var modified = ReadVarint(reader);
             Expect(reader, 0x2A, 0x2B, 0x0E);
             var length = ReadVarint(reader);
             if (length < 5 || length > 1024 || stream.Position + (long)length + 3 != stream.Length)
@@ -45,8 +133,10 @@ public static class NightLight
             var active = false;
             var usable = true;
             var previous = -1;
+            var fields = new SortedDictionary<int, byte[]>();
             while (true)
             {
+                var start = (int)stream.Position;
                 var header = reader.ReadByte();
                 if (header == 0)
                     break;
@@ -84,11 +174,12 @@ public static class NightLight
                 if (id <= previous)
                     return null;
                 previous = id;
+                fields.Add(id, bytes[start..(int)stream.Position]);
             }
             if (stream.Position != end)
                 return null;
             Expect(reader, 0, 0, 0);
-            return active && usable;
+            return new(modified, active, usable, fields);
         }
         catch (Exception error) when (error is IOException or InvalidDataException)
         {
@@ -116,5 +207,15 @@ public static class NightLight
                 return value;
         }
         throw new InvalidDataException("Invalid CloudStore integer.");
+    }
+
+    private static void WriteVarint(BinaryWriter writer, ulong value)
+    {
+        do
+        {
+            var next = (byte)(value & 127);
+            value >>= 7;
+            writer.Write(value == 0 ? next : (byte)(next | 128));
+        } while (value != 0);
     }
 }

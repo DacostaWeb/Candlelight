@@ -2,7 +2,7 @@
 
 A Windows fork of [LightBulb](https://github.com/Tyrrrz/LightBulb) with independent
 monitor profiles, exact-zero red-only output, quick presets and custom daily
-schedules. Current version: **0.1.2**.
+schedules. Current version: **0.1.4**.
 
 - Each connected monitor has its own temperature and software brightness (1–100%).
 - Choose **Dia / noite**, **Manual**, or **Horários** for each screen.
@@ -14,8 +14,9 @@ schedules. Current version: **0.1.2**.
   at that time. Schedules wrap midnight and repeat every day. Overlapping transitions
   are shortened to end at the next point. Invalid or duplicate times retain the last
   valid schedule.
-- Resume, display power-on and unlock reapply current values immediately, followed
-  by five seconds of retries. Startup skips the daylight-to-night fade.
+- Resume, display power-on and unlock recover current values, followed by five
+  seconds of verification. Protected handovers apply profiles behind a brief
+  black cover. Startup skips the daylight-to-night fade.
 - If GDI rejects a ramp or reports success without applying it, Candlelight tries
   the Windows color-system LUT and verifies it by reading that same layer back.
   A nonneutral GDI layer is neutralized afterwards so brightness is not multiplied
@@ -44,9 +45,13 @@ resets can occur before an application receives a resume event, so elimination o
 every flash is not guaranteed. Color-system writes/readback and visible color
 changes were verified on the HDMI OLED and internal panel. Lid reopening retained
 warmth, while a Modern Standby resume produced a brief intermediate blue flash.
-The revised recovery in 0.1.2 requires a repeat physical test. Hibernation and
-switching back to USB-C remain hardware checks.
-Night Light handover is an experimental proposal, not an implemented feature.
+Night Light prevented that blue flash on the internal panel, but keeping both
+filters active caused visible alternation. The protected handover in 0.1.4 needs
+a new physical suspension test. Hibernation and USB-C remain hardware checks.
+Version 0.1.4 adds a protected Night Light handover: a brief black cover hides
+the switch back to each monitor's Candlelight profile. The **Pausa a preto**
+option is enabled by default. Strength and schedule are preserved, and hardware
+verification remains necessary to establish flash-free wake on a given driver.
 See [wake recovery details](docs/wake-recovery.md).
 
 Settings are stored beside a writable portable executable, or in
