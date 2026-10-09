@@ -7,6 +7,9 @@ message-only windows do not receive system broadcasts. Application startup and
 resume skip the daylight-to-night smoothing path. A serialized worker retries
 every 50 ms for five seconds, skipping ticks when the driver is busy. Display-off
 notifications stop writes and retries. Context recreation does not reset gamma.
+Display-state listeners filter the notification GUID before reading its value:
+an unrelated power-saving value of zero must not block writes as if the display
+were off. Regression tests dispatch real-format native notification buffers.
 
 Automated tests use fake devices and a controlled clock to verify monitor routing,
 immediate night values on wake, retry expiry, display-off, driver failure and

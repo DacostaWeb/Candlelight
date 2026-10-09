@@ -48,19 +48,27 @@ public partial class PowerSettingNotification
 
         var listener = WndProcSponge.Default.Listen(
             0x218,
-            message =>
-            {
-                if (
-                    message.WParam != 0x8013
-                    || message.TryGetLParam<PowerBroadcastSetting>() is not { } setting
-                    || setting.DataLength < 4
-                )
-                    return;
-
-                callback(Marshal.ReadInt32(message.LParam, 20));
-            }
+            message => DispatchDisplayState(powerSettingId, message, callback)
         );
         return PowerKit.Disposable.Merge(listener, registration);
+    }
+
+    internal static void DispatchDisplayState(
+        Guid powerSettingId,
+        WndProcMessage message,
+        Action<int> callback
+    )
+    {
+        if (
+            message.Id != 0x218
+            || message.WParam != 0x8013
+            || message.TryGetLParam<PowerBroadcastSetting>() is not { } setting
+            || setting.PowerSettingId != powerSettingId
+            || setting.DataLength < 4
+        )
+            return;
+
+        callback(Marshal.ReadInt32(message.LParam, 20));
     }
 
     public static PowerSettingNotification? TryRegister(Guid powerSettingId, Action callback)
