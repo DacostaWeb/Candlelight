@@ -12,4 +12,7 @@
   <Project Path="LightBulb.Core.Tests/LightBulb.Core.Tests.csproj" />
   <Project Path="LightBulb.Core/LightBulb.Core.csproj" />
   <Project Path="LightBulb.PlatformInterop/LightBulb.PlatformInterop.csproj" />
+  <Project Path="Candlelight.Engine/Candlelight.Engine.csproj" />
+  <Project Path="Candlelight.Next/Candlelight.Next.csproj" />
+  <Project Path="Candlelight.Migration/Candlelight.Migration.csproj" />
 </Solution>

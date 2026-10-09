@@ -1,5 +1,18 @@
 # Candlelight
 
+**0.2.1 hardware-test prototype:** a smaller, independent application now uses
+the documented Windows Magnification API instead of gamma/Night Light handovers.
+With one enabled monitor, the desktop filter includes the Windows taskbar;
+coverage at 2700 K / 100% was physically confirmed on the internal panel.
+It includes saved monitor profiles, explicit red-only mode, presets and daily
+schedules. Different per-monitor values use a windowed renderer whose taskbar
+coverage remains unresolved. See [the renderer and test gates](docs/next-engine.md).
+Run `Candlelight.Next.exe`; build/package with `scripts/publish-next.ps1`.
+The 0.1.4 physical wake test failed, so it is retained as a rollback baseline,
+not a verified flash-free solution. Real wake testing of 0.2 is still required.
+
+## Legacy 0.1.4 implementation
+
 A Windows fork of [LightBulb](https://github.com/Tyrrrz/LightBulb) with independent
 monitor profiles, exact-zero red-only output, quick presets and custom daily
 schedules. Current version: **0.1.4**.
@@ -46,8 +59,9 @@ every flash is not guaranteed. Color-system writes/readback and visible color
 changes were verified on the HDMI OLED and internal panel. Lid reopening retained
 warmth, while a Modern Standby resume produced a brief intermediate blue flash.
 Night Light prevented that blue flash on the internal panel, but keeping both
-filters active caused visible alternation. The protected handover in 0.1.4 needs
-a new physical suspension test. Hibernation and USB-C remain hardware checks.
+filters active caused visible alternation. The protected handover in 0.1.4 failed
+its physical suspension retest; the 0.2 renderer replaces that mechanism.
+Hibernation and USB-C remain hardware checks.
 Version 0.1.4 adds a protected Night Light handover: a brief black cover hides
 the switch back to each monitor's Candlelight profile. The **Pausa a preto**
 option is enabled by default. Strength and schedule are preserved, and hardware

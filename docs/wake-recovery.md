@@ -182,6 +182,22 @@ cover, checking every pixel is black without changing real monitor colors.
 Real suspension, hibernation and OLED reconnection still require physical tests.
 The diagnostic switch is not installed as an automatic application feature.
 
+The physical 0.1.4 test failed: after the black cover, the user observed red,
+white/blue, then orange. Stored ramps still matched the requested 2700 K values,
+and Night Light was logically off. Neither readback nor a fixed settling delay
+therefore certified the visible result. The next experiment replaces the gamma
+handover entirely with an independent, documented Magnification renderer;
+see [the essential 0.2 prototype](next-engine.md). Its physical wake gate remains
+open until the user tests the new mechanism.
+
+In the 0.2 prototype, the user reported that the auto-hidden taskbar remained
+unfiltered. Raising the windowed hosts on every refresh did not fix it.
+The global desktop effect subsequently filtered the taskbar, physically
+confirmed by the user at 2700 K / 100% with the control window hidden and Night
+Light off. This applies only when connected monitors share one enabled profile.
+Different profiles still use the windowed path and need a shell coverage solution.
+The global effect's sleep/resume behavior remains a separate physical test.
+
 Sources:
 
 - [Microsoft: SetDeviceGammaRamp limitations](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-setdevicegammaramp)

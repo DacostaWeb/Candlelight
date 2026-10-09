@@ -2,7 +2,13 @@ using System;
 using System.Linq;
 using System.Text;
 
+#if CANDLELIGHT_ENGINE
+namespace Candlelight.Engine;
+
+#else
 namespace LightBulb.PlatformInterop;
+
+#endif
 
 public static class MonitorIdentity
 {

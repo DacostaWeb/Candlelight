@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Version>0.2.1</Version>
+    <DefineConstants>$(DefineConstants);CANDLELIGHT_ENGINE</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CSharpier.MsBuild" PrivateAssets="all" />
+    <Compile Include="../LightBulb.PlatformInterop/MonitorIdentity.cs" Link="MonitorIdentity.cs" />
+    <InternalsVisibleTo Include="LightBulb.Core.Tests" />
+    <InternalsVisibleTo Include="Candlelight.Next" />
+  </ItemGroup>
+</Project>

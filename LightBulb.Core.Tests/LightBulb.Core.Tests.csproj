@@ -22,5 +22,6 @@
     <ProjectReference Include="../LightBulb.Core/LightBulb.Core.csproj" />
     <ProjectReference Include="../LightBulb.PlatformInterop/LightBulb.PlatformInterop.csproj" />
     <ProjectReference Include="../LightBulb/LightBulb.csproj" />
+    <ProjectReference Include="../Candlelight.Engine/Candlelight.Engine.csproj" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Version>0.2.1</Version>
+    <AssemblyName>Candlelight.Next</AssemblyName>
+    <ApplicationIcon>../favicon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CSharpier.MsBuild" PrivateAssets="all" />
+    <ProjectReference Include="../Candlelight.Engine/Candlelight.Engine.csproj" />
+    <Content Include="../favicon.ico" Link="favicon.ico" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
