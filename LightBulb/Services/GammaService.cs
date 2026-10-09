@@ -27,6 +27,7 @@ public sealed class GammaService : IDisposable
     private IReadOnlyList<DisplayInfo> _displays = [];
     private bool _contextsValid;
     private bool _isUpdating;
+    private bool _isRecovering;
     private bool _isDisposed;
     private bool _displayOff;
     private bool _hasRequest;
@@ -69,22 +70,25 @@ public sealed class GammaService : IDisposable
                     ?? Disposable.Null,
                 PowerSettingNotification.TryRegisterDisplayState(
                     PowerSettingNotification.Ids.ConsoleDisplayStateChanged,
-                    OnDisplayState
+                    state => OnDisplayState(state, "console")
                 ) ?? Disposable.Null,
                 PowerSettingNotification.TryRegisterDisplayState(
                     PowerSettingNotification.Ids.SessionDisplayStatusChanged,
-                    OnDisplayState
+                    state => OnDisplayState(state, "session")
                 ) ?? Disposable.Null,
                 PowerSettingNotification.TryRegisterDisplayState(
                     PowerSettingNotification.Ids.MonitorPowerStateChanged,
-                    OnDisplayState
+                    state => OnDisplayState(state, "monitor")
                 ) ?? Disposable.Null,
                 PowerSettingNotification.TryRegister(
                     PowerSettingNotification.Ids.PowerSavingStatusChanged,
                     InvalidateGamma
                 ) ?? Disposable.Null,
-                ResumeNotification.Register(Recover),
-                SystemEvent.Register(SystemEvent.Ids.DisplayChanged, Recover),
+                ResumeNotification.Register(() => Recover("resume/session")),
+                SystemEvent.Register(
+                    SystemEvent.Ids.DisplayChanged,
+                    () => Recover("display change")
+                ),
                 SystemEvent.Register(SystemEvent.Ids.PaletteChanged, InvalidateDeviceContexts),
                 SystemEvent.Register(SystemEvent.Ids.SettingsChanged, InvalidateDeviceContexts),
                 SystemEvent.Register(SystemEvent.Ids.SystemColorsChanged, InvalidateDeviceContexts)
@@ -207,8 +211,11 @@ public sealed class GammaService : IDisposable
         }
     }
 
-    internal void OnDisplayState(int state)
+    internal void OnDisplayState(int state) => OnDisplayState(state, "display");
+
+    private void OnDisplayState(int state, string source)
     {
+        Diagnostics.ColorTrace.Write($"Display power [{source}]: {state}");
         lock (_sync)
         {
             if (_isDisposed)
@@ -221,33 +228,46 @@ public sealed class GammaService : IDisposable
                 return;
             }
         }
-        Recover();
+        Recover($"{source} power={state}");
     }
 
-    public void Recover()
+    public void Recover() => Recover("requested");
+
+    private void Recover(string reason)
     {
         lock (_sync)
         {
-            if (_isDisposed || _isUpdating)
+            if (_isDisposed || _isUpdating || _isRecovering)
                 return;
+            _isRecovering = true;
             _displayOff = false;
             _contextsValid = false;
             _lastInvalidation = _clock();
         }
 
-        // Re-evaluate the current time after sleep. Never fade from daylight on wake.
-        RecoveryRequested?.Invoke();
-        lock (_sync)
+        try
         {
-            if (_isDisposed || !_hasRequest)
-                return;
-            Apply(true);
-            if (_settings.IsWakeRecoveryEnabled)
+            Diagnostics.ColorTrace.Write($"Recovery [{reason}] started");
+            // Recompute targets first. SetGamma queues them during this callback,
+            // so the first recovery write is not immediately duplicated.
+            RecoveryRequested?.Invoke();
+            lock (_sync)
             {
-                _recoveryDeadline = _clock() + 5000;
-                if (_runRecoveryTimer)
-                    _recoveryTimer.Change(50, 50);
+                if (_isDisposed || !_hasRequest || _displayOff)
+                    return;
+                Apply(true);
+                if (_settings.IsWakeRecoveryEnabled)
+                {
+                    _recoveryDeadline = _clock() + 5000;
+                    if (_runRecoveryTimer)
+                        _recoveryTimer.Change(50, 50);
+                }
             }
+        }
+        finally
+        {
+            lock (_sync)
+                _isRecovering = false;
         }
         DisplaysChanged?.Invoke();
     }
@@ -286,7 +306,7 @@ public sealed class GammaService : IDisposable
             _hasRequest = true;
             _fallback = fallback;
             _requested = configurations ?? new Dictionary<string, ColorConfiguration>();
-            if (!_displayOff)
+            if (!_displayOff && !_isRecovering)
                 Apply(false);
         }
     }
@@ -332,7 +352,13 @@ public sealed class GammaService : IDisposable
 
                 updated = true;
                 var color = GammaColor.FromConfiguration(config);
-                if (context.Device.SetGamma(color.Red, color.Green, color.Blue))
+                var started = Stopwatch.GetTimestamp();
+                var applied = context.Device.SetGamma(color.Red, color.Green, color.Blue);
+                if (force)
+                    Diagnostics.ColorTrace.Write(
+                        $"Recovery apply [{context.Info.Name}]: {config}; {context.Device.ApplyDiagnostics}; success={applied}; {Stopwatch.GetElapsedTime(started).TotalMilliseconds:F1} ms"
+                    );
+                if (applied)
                     _applied[context.Info.Id] = config;
                 else
                 {

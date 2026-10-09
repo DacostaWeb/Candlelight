@@ -10,6 +10,7 @@ public class GammaRampWriterSpecs
     {
         public bool IsColorSystemAvailable { get; set; } = true;
         public bool RejectGdiTarget { get; set; }
+        public bool RejectGdiIdentity { get; set; }
         public bool IgnoreGdiWrite { get; set; }
         public bool IgnoreColorWrite { get; set; }
         public bool RejectColorWrite { get; set; }
@@ -21,6 +22,8 @@ public class GammaRampWriterSpecs
         {
             Writes.Add("gdi");
             if (RejectGdiTarget && !GammaRamp.Identity().Matches(ramp))
+                return false;
+            if (RejectGdiIdentity && GammaRamp.Identity().Matches(ramp))
                 return false;
             if (!IgnoreGdiWrite)
                 Gdi = ramp;
@@ -73,7 +76,7 @@ public class GammaRampWriterSpecs
         Assert.True(red.Matches(api.Color));
         Assert.All(api.Color.Green, value => Assert.Equal((ushort)0, value));
         Assert.All(api.Color.Blue, value => Assert.Equal((ushort)0, value));
-        Assert.Equal(["gdi", "color", "gdi"], api.Writes);
+        Assert.Equal(["gdi", "color"], api.Writes);
     }
 
     [Fact]
@@ -97,7 +100,7 @@ public class GammaRampWriterSpecs
         var writer = new GammaRampWriter(api);
         Assert.True(writer.Apply(GammaRamp.Identity()));
         Assert.True(writer.UsesColorSystem);
-        Assert.Equal(["color", "gdi"], api.Writes);
+        Assert.Equal(["color"], api.Writes);
         Assert.True(GammaRamp.Identity().Matches(api.Color));
     }
 
@@ -110,6 +113,48 @@ public class GammaRampWriterSpecs
         var recreated = new GammaRampWriter(api, first.UsesColorSystem);
         Assert.True(recreated.Apply(GammaRamp.Identity()));
         Assert.True(GammaRamp.Identity().Matches(api.Color));
+    }
+
+    [Fact]
+    public void Wake_retries_do_not_rewrite_an_already_neutral_gdi_layer()
+    {
+        var api = new Api { RejectGdiIdentity = true };
+        var writer = new GammaRampWriter(api, true);
+        for (var i = 0; i < 100; i++)
+            Assert.True(writer.Apply(GammaRamp.Create(0.15, 0, 0, i % 5)));
+        Assert.Equal(100, api.Writes.Count);
+        Assert.All(api.Writes, operation => Assert.Equal("color", operation));
+        Assert.Contains("GDI identity kept", writer.LastOperation);
+    }
+
+    [Fact]
+    public void A_non_neutral_gdi_layer_is_cleared_after_the_color_filter_is_installed()
+    {
+        var api = new Api();
+        var oldGamma = GammaRamp.Create(1, 0.8, 0.6, 0);
+        api.WriteGdi(ref oldGamma);
+        api.Writes.Clear();
+        var writer = new GammaRampWriter(api, true);
+        var red = GammaRamp.Create(0.15, 0, 0, 0);
+        Assert.True(writer.Apply(red));
+        Assert.Equal(["color", "gdi"], api.Writes);
+        Assert.True(GammaRamp.Identity().Matches(api.Gdi));
+        Assert.True(red.Matches(api.Color));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_failed_or_ignored_gdi_neutralization_is_not_reported_as_success(bool silent)
+    {
+        var api = new Api();
+        var oldGamma = GammaRamp.Create(1, 0.8, 0.6, 0);
+        api.WriteGdi(ref oldGamma);
+        api.IgnoreGdiWrite = silent;
+        api.RejectGdiIdentity = !silent;
+        var writer = new GammaRampWriter(api, true);
+        Assert.False(writer.Apply(GammaRamp.Create(0.15, 0, 0, 0)));
+        Assert.Contains("neutralizar", writer.FailureReason);
     }
 
     [Fact]

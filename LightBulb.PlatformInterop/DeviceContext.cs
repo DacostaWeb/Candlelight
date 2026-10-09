@@ -17,6 +17,7 @@ public partial class DeviceContext(nint handle, string? deviceName = null)
     private GammaRampWriter Writer =>
         _writer ??= new(_api, deviceName is not null && ColorSystemDevices.ContainsKey(deviceName));
     public string? FailureReason => Writer.FailureReason;
+    public string? ApplyDiagnostics => Writer.LastOperation;
     public bool UsesColorSystem => Writer.UsesColorSystem;
 
     private bool SetGammaRamp(GammaRamp ramp)

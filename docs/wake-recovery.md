@@ -41,8 +41,27 @@ daytime transitions, context recreation, reset order and exact-zero validation.
 This compatibility implementation is original C# code; the export ABI was
 cross-checked with the [KelvinShift gamma implementation](https://github.com/mackid1993/KelvinShift/blob/main/win32/src/GammaService.cpp).
 
-No real sleep, hibernation, lid-close or USB-C reconnection test has been performed.
-The OLED was subsequently disconnected. The production C# `DeviceContext` was
+The user confirmed that the application's numeric controls, sliders and presets
+now change the internal display's color. At 2700 K / 100%, closing and reopening
+the lid preserved the warm color. A separate suspension test used Modern Standby
+(confirmed by Kernel-Power events 506/507): the first visible image was warm,
+then a brief blue/neutral flash occurred and the warm color returned. The earlier
+status log did not record individual recovery writes, so it cannot establish
+whether Windows or Candlelight caused that intermediate frame.
+
+Version 0.1.2 removes redundant operations in this path. Target recalculation
+queues the request and recovery writes it once, instead of twice immediately.
+The color-system path reads GDI first and leaves an already neutral LUT untouched;
+if neutralization is needed, it occurs after installing the desired filter and is
+verified. The color filter is still refreshed during the five-second recovery
+window because driver state can change independently of cached LUT readback.
+The bounded `ColorStatus.txt` now records power-event sources and each recovery
+write's before/after RGB values, whether GDI needed neutralizing, and call duration.
+These changes require a new physical suspension test before claiming the flash
+is resolved.
+
+No real hibernation or USB-C reconnection test has been performed. The OLED was
+subsequently disconnected. The production C# `DeviceContext` was
 then exercised on the internal panel at 2700 K / 100% brightness: its color-system
 readback was R=65026, G=42514, B=22289 and GDI was an exact identity (65535 in each
 channel). The user confirmed the visible color change on the internal screen.
@@ -63,7 +82,7 @@ application alone. Check gamma on each display again after reconnecting.
 The proposed sequence is to arm Night Light before suspension or lid-close,
 reapply Candlelight on wake, then restore the previous Night Light state and
 reapply Candlelight again. It remains an experimental candidate, not part of
-v0.1.0. It must first be established that Night Light covers the earliest visible
+the current release. It must first be established that Night Light covers the earliest visible
 frame on this hardware and does not introduce an extra gamma reset on handover.
 Automation would need version-aware CloudStore decoding, preservation of unknown
 fields, and restoration of the user's original state instead of forcing it off.
@@ -74,6 +93,7 @@ Sources:
 - [Microsoft: SetDeviceGammaRamp limitations](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-setdevicegammaramp)
 - [Microsoft: message-only windows](https://learn.microsoft.com/en-us/windows/win32/winmsg/window-features#message-only-windows)
 - [Microsoft: automatic resume notification](https://learn.microsoft.com/en-us/windows/win32/power/pbt-apmresumeautomatic)
+- [Microsoft: Modern Standby resume order](https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/modern-standby#resume-from-modern-standby)
 - [Microsoft: monitor identifying information](https://learn.microsoft.com/en-us/windows/win32/wmicoreprov/wmimonitorid)
 - [Night Light control implementation and reverse-engineered schema](https://github.com/kvnxiao/win-nightlight-cli)
 - [Upstream gamma-range restart report](https://github.com/Tyrrrz/LightBulb/issues/253)

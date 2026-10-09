@@ -66,9 +66,48 @@ public class GammaServiceSpecs
         device.Writes.Clear();
         service.RecoveryRequested += () => service.SetGamma(new(500, 0.15));
         service.Recover();
-        Assert.NotEmpty(device.Writes);
+        Assert.Single(device.Writes);
         Assert.All(device.Writes, color => Assert.Equal(new GammaColor(0.15, 0, 0), color));
         Assert.Equal(0, device.Resets);
+    }
+
+    [Fact]
+    public void Display_off_during_target_recalculation_cancels_the_recovery_write()
+    {
+        var device = new Device();
+        using var service = new GammaService(
+            new SettingsService(),
+            () => [Context("oled", device)],
+            () => 10000,
+            false
+        );
+        service.SetGamma(new(500, 0.15));
+        device.Writes.Clear();
+        service.RecoveryRequested += () =>
+        {
+            service.SetGamma(new(2700, 1));
+            service.OnDisplayState(0);
+        };
+        service.Recover();
+        Assert.Empty(device.Writes);
+    }
+
+    [Fact]
+    public void A_failed_recovery_callback_does_not_leave_normal_controls_blocked()
+    {
+        var device = new Device();
+        using var service = new GammaService(
+            new SettingsService(),
+            () => [Context("internal", device)],
+            () => 10000,
+            false
+        );
+        Action fail = () => throw new InvalidOperationException("callback failed");
+        service.RecoveryRequested += fail;
+        Assert.Throws<InvalidOperationException>(() => service.Recover());
+        service.RecoveryRequested -= fail;
+        service.SetGamma(new(2700, 1));
+        Assert.Single(device.Writes);
     }
 
     [Fact]

@@ -2,7 +2,7 @@
 
 A Windows fork of [LightBulb](https://github.com/Tyrrrz/LightBulb) with independent
 monitor profiles, exact-zero red-only output, quick presets and custom daily
-schedules. Current version: **0.1.1**.
+schedules. Current version: **0.1.2**.
 
 - Each connected monitor has its own temperature and software brightness (1–100%).
 - Choose **Dia / noite**, **Manual**, or **Horários** for each screen.
@@ -18,7 +18,8 @@ schedules. Current version: **0.1.1**.
   by five seconds of retries. Startup skips the daylight-to-night fade.
 - If GDI rejects a ramp or reports success without applying it, Candlelight tries
   the Windows color-system LUT and verifies it by reading that same layer back.
-  The GDI layer is neutralized afterwards so brightness is not multiplied twice.
+  A nonneutral GDI layer is neutralized afterwards so brightness is not multiplied
+  twice; an already neutral layer is left untouched during recovery retries.
   This compatibility path is selected independently for each affected monitor.
   Context recreation retains its selection; exit resets both layers.
   A color-system filter left by an earlier process is detected, so controls cannot
@@ -41,8 +42,10 @@ internal screen's brightness to 100% separately. Changes save automatically.
 This version targets SDR displays in an extended desktop. Windows/driver gamma
 resets can occur before an application receives a resume event, so elimination of
 every flash is not guaranteed. Color-system writes/readback and visible color
-changes were verified on the HDMI OLED and internal panel. Real sleep/hibernation
-and switching back to USB-C remain hardware checks.
+changes were verified on the HDMI OLED and internal panel. Lid reopening retained
+warmth, while a Modern Standby resume produced a brief intermediate blue flash.
+The revised recovery in 0.1.2 requires a repeat physical test. Hibernation and
+switching back to USB-C remain hardware checks.
 Night Light handover is an experimental proposal, not an implemented feature.
 See [wake recovery details](docs/wake-recovery.md).
 
@@ -68,9 +71,9 @@ three interface states and exits. `--list-displays` reports detected displays
 without changing colors. `--diagnose-displays` reads the GDI and color-system LUTs;
 `--diagnose-displays=report.txt` also saves the report. Both are read-only.
 CI builds a self-contained Windows x64 portable ZIP. Packaging excludes local settings.
-`ColorStatus.txt` is a bounded local diagnostic trace of requested values and errors;
+`ColorStatus.txt` is a bounded local diagnostic trace of requested values, recovery writes and errors;
 it is excluded from packages. It contains no location data.
-Installer source is rebranded but an installer is not distributed with v0.1.1.
+Installer source is rebranded but an installer is not distributed with v0.1.2.
 
 The exact-zero color/ramp handling is adapted from
 [LightBulb Ahead](https://github.com/karipesonen/LightBulb-Ahead).
