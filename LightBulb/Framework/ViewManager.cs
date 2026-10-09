@@ -18,6 +18,7 @@ public partial class ViewManager
         {
             MainViewModel => new MainView(),
             DashboardViewModel => new DashboardView(),
+            DisplayControlsViewModel => new DisplayControlsView(),
             MessageBoxViewModel => new MessageBoxView(),
             SettingsViewModel => new SettingsView(),
             AdvancedSettingsTabViewModel => new AdvancedSettingsTabView(),

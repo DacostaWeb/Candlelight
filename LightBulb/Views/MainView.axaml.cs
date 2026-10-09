@@ -1,6 +1,7 @@
 using System;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using LightBulb.Framework;
 using LightBulb.ViewModels;
 
@@ -10,7 +11,14 @@ public partial class MainView : Window<MainViewModel>
 {
     public MainView() => InitializeComponent();
 
-    private void Window_OnOpened(object? sender, EventArgs args) => DataContext.IsOpen = true;
+    private void Window_OnOpened(object? sender, EventArgs args)
+    {
+        DataContext.IsOpen = true;
+        if (StartOptions.Current.PreviewCaptureDirectory is { } directory)
+            Dispatcher.UIThread.Post(async () =>
+                await Diagnostics.PreviewVerification.RunAsync(this, DataContext, directory)
+            );
+    }
 
     private void Window_OnClosed(object? sender, EventArgs args) => DataContext.IsOpen = false;
 

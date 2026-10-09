@@ -47,7 +47,7 @@ public partial class SettingsService()
 
     public double MaximumTemperature => 20_000;
 
-    public double MinimumBrightness => 0.1;
+    public double MinimumBrightness => 0.01;
 
     public double MaximumBrightness => 1;
 
@@ -56,6 +56,24 @@ public partial class SettingsService()
 
     [ObservableProperty]
     public partial ColorConfiguration NightConfiguration { get; set; } = new(3900, 0.85);
+
+    [ObservableProperty]
+    public partial IReadOnlyList<DisplayProfile> DisplayProfiles { get; set; } = [];
+
+    [ObservableProperty]
+    public partial IReadOnlyList<ColorPreset> Presets { get; set; } =
+    [
+        new("day", "Dia", new(6600, 1)),
+        new("reading", "Leitura", new(2700, 0.65)),
+        new("night", "Noite", new(1800, 0.35)),
+        new("oled-red", "OLED vermelho", new(500, 0.15)),
+    ];
+
+    [ObservableProperty]
+    public partial string? SelectedDisplayId { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsWakeRecoveryEnabled { get; set; } = true;
 
     [ObservableProperty]
     public partial TimeSpan ConfigurationTransitionDuration { get; set; } =
@@ -87,7 +105,7 @@ public partial class SettingsService()
     // Advanced
 
     [ObservableProperty]
-    public partial ThemeVariant Theme { get; set; }
+    public partial ThemeVariant Theme { get; set; } = ThemeVariant.Dark;
 
     [ObservableProperty]
     public partial Language Language { get; set; }
@@ -97,7 +115,7 @@ public partial class SettingsService()
     public partial bool IsAutoStartEnabled { get; set; }
 
     [ObservableProperty]
-    public partial bool IsAutoUpdateEnabled { get; set; } = true;
+    public partial bool IsAutoUpdateEnabled { get; set; }
 
     [ObservableProperty]
     public partial bool IsDefaultToDayConfigurationEnabled { get; set; }
@@ -157,6 +175,11 @@ public partial class SettingsService()
 
     public override void Save()
     {
+        if (StartOptions.Current.IsPreview)
+        {
+            base.Save();
+            return;
+        }
         // Disallow auto-start in debug mode to make things simpler
 #if DEBUG
         IsAutoStartEnabled = false;
@@ -185,6 +208,14 @@ public partial class SettingsService()
     public override bool Load()
     {
         var wasLoaded = base.Load();
+
+        if (StartOptions.Current.IsPreview)
+        {
+            IsFirstTimeExperienceEnabled = false;
+            IsUkraineSupportMessageEnabled = false;
+            IsExtendedGammaRangeUnlocked = true;
+            return wasLoaded;
+        }
 
         // Get values from the registry
         IsExtendedGammaRangeUnlocked = _extendedGammaRangeSwitch.IsSet;

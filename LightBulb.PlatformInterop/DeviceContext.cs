@@ -4,11 +4,11 @@ using LightBulb.PlatformInterop.Internal;
 
 namespace LightBulb.PlatformInterop;
 
-public partial class DeviceContext(nint handle) : NativeResource(handle)
+public partial class DeviceContext(nint handle) : NativeResource(handle), IGammaDevice
 {
     private int _gammaChannelOffset;
 
-    private void SetGammaRamp(GammaRamp ramp)
+    private bool SetGammaRamp(GammaRamp ramp)
     {
         if (!NativeMethods.SetDeviceGammaRamp(Handle, ref ramp))
         {
@@ -16,36 +16,22 @@ public partial class DeviceContext(nint handle) : NativeResource(handle)
                 $"Failed to set gamma ramp on device context #{Handle}). "
                     + $"Error {Marshal.GetLastWin32Error()}."
             );
+            return false;
         }
+
+        return true;
     }
 
-    public void SetGamma(double redMultiplier, double greenMultiplier, double blueMultiplier)
+    public bool SetGamma(double redMultiplier, double greenMultiplier, double blueMultiplier)
     {
-        var ramp = new GammaRamp
-        {
-            Red = new ushort[256],
-            Green = new ushort[256],
-            Blue = new ushort[256],
-        };
-
-        // Create linear ramps for each color
-        for (var i = 0; i < 256; i++)
-        {
-            ramp.Red[i] = (ushort)(i * 255 * redMultiplier);
-            ramp.Green[i] = (ushort)(i * 255 * greenMultiplier);
-            ramp.Blue[i] = (ushort)(i * 255 * blueMultiplier);
-        }
-
         // Some drivers will ignore requests to change gamma if the specified ramp is the same as last time,
         // even if the actual gamma has been changed in-between (for example, by screen going to sleep).
         // In order to work around this, we add a small random deviation to each ramp to make sure
         // they're always unique, forcing the drivers to refresh the device context every time.
         _gammaChannelOffset = ++_gammaChannelOffset % 5;
-        ramp.Red[255] = (ushort)(ramp.Red[255] + _gammaChannelOffset);
-        ramp.Green[255] = (ushort)(ramp.Green[255] + _gammaChannelOffset);
-        ramp.Blue[255] = (ushort)(ramp.Blue[255] + _gammaChannelOffset);
-
-        SetGammaRamp(ramp);
+        return SetGammaRamp(
+            GammaRamp.Create(redMultiplier, greenMultiplier, blueMultiplier, _gammaChannelOffset)
+        );
     }
 
     public void ResetGamma() => SetGamma(1, 1, 1);

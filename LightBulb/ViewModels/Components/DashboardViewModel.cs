@@ -34,13 +34,17 @@ public partial class DashboardViewModel : ViewModelBase
     private IDisposable? _enableAfterDelayRegistration;
     private ColorConfiguration? _configurationSmoothingSource;
     private ColorConfiguration? _configurationSmoothingTarget;
+    private bool _isInitialized;
+    private string? _lastStatusDisplayId;
+    private ColorConfiguration _lastStatusConfiguration;
 
     public DashboardViewModel(
         SettingsService settingsService,
         LocalizationManager localizationManager,
         GammaService gammaService,
         HotKeyService hotKeyService,
-        ExternalApplicationService externalApplicationService
+        ExternalApplicationService externalApplicationService,
+        DisplayControlsViewModel displays
     )
     {
         _settingsService = settingsService;
@@ -48,6 +52,9 @@ public partial class DashboardViewModel : ViewModelBase
         _gammaService = gammaService;
         _hotKeyService = hotKeyService;
         _externalApplicationService = externalApplicationService;
+        Displays = displays;
+        _gammaService.RecoveryRequested += OnRecoveryRequested;
+        Displays.ProfilesChanged += ApplyConfigurations;
 
         _eventSubscription = Disposable.Merge(
             this.WatchProperty(
@@ -104,6 +111,43 @@ public partial class DashboardViewModel : ViewModelBase
     }
 
     public LocalizationManager LocalizationManager { get; }
+
+    public DisplayControlsViewModel Displays { get; }
+
+    private void OnRecoveryRequested()
+    {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(OnRecoveryRequested, DispatcherPriority.Send);
+            return;
+        }
+        Instant = DateTimeOffset.Now;
+        CurrentConfiguration = TargetConfiguration;
+        _configurationSmoothingSource = null;
+        _configurationSmoothingTarget = null;
+        ApplyConfigurations();
+    }
+
+    private void ApplyConfigurations()
+    {
+        var configurations = Displays.Evaluate(
+            SolarTimes,
+            Instant,
+            IsActive,
+            TemperatureOffset,
+            BrightnessOffset
+        );
+        _gammaService.SetGamma(CurrentConfiguration, configurations);
+        if (
+            Displays.SelectedDisplay is { } selected
+            && (_lastStatusDisplayId != selected.Id || _lastStatusConfiguration != selected.Current)
+        )
+        {
+            _lastStatusDisplayId = selected.Id;
+            _lastStatusConfiguration = selected.Current;
+            OnPropertyChanged(nameof(StatusText));
+        }
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsActive))]
@@ -246,11 +290,15 @@ public partial class DashboardViewModel : ViewModelBase
         Program.Name
         + Environment.NewLine
         + (
-            IsActive
-                ? CurrentConfiguration.Temperature.ToString("F0")
-                    + " / "
-                    + CurrentConfiguration.Brightness.ToString("P0")
-                : LocalizationManager.TrayTooltipDisabled
+            Displays.SelectedDisplay is { } selected && IsActive
+                ? selected.Name + Environment.NewLine + selected.Readout
+                : (
+                    IsActive
+                        ? CurrentConfiguration.Temperature.ToString("F0")
+                            + " / "
+                            + CurrentConfiguration.Brightness.ToString("P0")
+                        : LocalizationManager.TrayTooltipDisabled
+                )
         );
 
     private void RegisterHotKeys()
@@ -277,13 +325,7 @@ public partial class DashboardViewModel : ViewModelBase
         {
             _hotKeyService.RegisterHotKey(
                 _settingsService.IncreaseTemperatureOffsetHotKey,
-                () =>
-                {
-                    TemperatureOffset += Math.Min(
-                        100,
-                        _settingsService.MaximumTemperature - TargetConfiguration.Temperature
-                    );
-                }
+                () => Displays.AdjustSelected(100, 0)
             );
         }
 
@@ -291,13 +333,7 @@ public partial class DashboardViewModel : ViewModelBase
         {
             _hotKeyService.RegisterHotKey(
                 _settingsService.DecreaseTemperatureOffsetHotKey,
-                () =>
-                {
-                    TemperatureOffset += Math.Max(
-                        -100,
-                        _settingsService.MinimumTemperature - TargetConfiguration.Temperature
-                    );
-                }
+                () => Displays.AdjustSelected(-100, 0)
             );
         }
 
@@ -305,13 +341,7 @@ public partial class DashboardViewModel : ViewModelBase
         {
             _hotKeyService.RegisterHotKey(
                 _settingsService.IncreaseBrightnessOffsetHotKey,
-                () =>
-                {
-                    BrightnessOffset += Math.Min(
-                        0.05,
-                        _settingsService.MaximumBrightness - TargetConfiguration.Brightness
-                    );
-                }
+                () => Displays.AdjustSelected(0, 0.05)
             );
         }
 
@@ -319,13 +349,7 @@ public partial class DashboardViewModel : ViewModelBase
         {
             _hotKeyService.RegisterHotKey(
                 _settingsService.DecreaseBrightnessOffsetHotKey,
-                () =>
-                {
-                    BrightnessOffset += Math.Max(
-                        -0.05,
-                        _settingsService.MinimumBrightness - TargetConfiguration.Brightness
-                    );
-                }
+                () => Displays.AdjustSelected(0, -0.05)
             );
         }
 
@@ -414,7 +438,7 @@ public partial class DashboardViewModel : ViewModelBase
             _configurationSmoothingTarget = null;
         }
 
-        _gammaService.SetGamma(CurrentConfiguration);
+        ApplyConfigurations();
     }
 
     private void UpdateIsPaused()
@@ -435,6 +459,12 @@ public partial class DashboardViewModel : ViewModelBase
 
     public override Task InitializeAsync()
     {
+        if (_isInitialized)
+            return Task.CompletedTask;
+        _isInitialized = true;
+        Displays.Initialize();
+        // Apply the correct state before any onboarding dialogs or UI timers.
+        OnRecoveryRequested();
         _updateInstantTimer.Start();
         _updateConfigurationTimer.Start();
         _updateIsPausedTimer.Start();
@@ -472,6 +502,7 @@ public partial class DashboardViewModel : ViewModelBase
     {
         TemperatureOffset = 0;
         BrightnessOffset = 0;
+        Displays.ResetSelectedAdjustments();
     }
 
     protected override void Dispose(bool disposing)
@@ -479,6 +510,8 @@ public partial class DashboardViewModel : ViewModelBase
         if (disposing)
         {
             _eventSubscription.Dispose();
+            _gammaService.RecoveryRequested -= OnRecoveryRequested;
+            Displays.ProfilesChanged -= ApplyConfigurations;
 
             _updateInstantTimer.Dispose();
             _updateConfigurationTimer.Dispose();

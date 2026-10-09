@@ -167,6 +167,8 @@ public partial class MainViewModel(
 
         _isInitialized = true;
 
+        await Dashboard.InitializeAsync();
+
         await FinalizePendingUpdateAsync();
 
         await ShowUkraineSupportMessageAsync();

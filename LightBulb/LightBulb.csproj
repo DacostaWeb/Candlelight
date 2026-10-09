@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
+    <AssemblyName>Candlelight</AssemblyName>
     <ApplicationIcon>../favicon.ico</ApplicationIcon>
     <PublishTrimmed>true</PublishTrimmed>
     <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
@@ -8,6 +9,7 @@
 
   <ItemGroup>
     <AvaloniaResource Include="../favicon.ico" Link="favicon.ico" />
+    <InternalsVisibleTo Include="LightBulb.Core.Tests" />
   </ItemGroup>
 
   <ItemGroup>

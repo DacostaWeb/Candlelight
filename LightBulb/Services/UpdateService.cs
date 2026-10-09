@@ -13,13 +13,13 @@ public class UpdateService(SettingsService settingsService) : IDisposable
     private readonly IUpdateManager? _updateManager = StartOptions.Current.IsAutoUpdateAllowed
         ? new UpdateManager(
             new GithubPackageResolver(
-                "Tyrrrz",
-                "LightBulb",
+                "DacostaWeb",
+                "Candlelight",
                 // Examples:
                 // LightBulb.win-arm64.zip
                 // LightBulb.win-x64.zip
                 // LightBulb.linux-x64.zip
-                $"LightBulb.{RuntimeInformation.RuntimeIdentifier}.zip"
+                $"Candlelight.{RuntimeInformation.RuntimeIdentifier}.zip"
             ),
             new ZipPackageExtractor()
         )

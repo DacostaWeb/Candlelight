@@ -1,0 +1,379 @@
+<UserControl
+  x:Class="LightBulb.Views.Components.DisplayControlsView"
+  xmlns="https://github.com/avaloniaui"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:vm="clr-namespace:LightBulb.ViewModels.Components"
+  xmlns:core="clr-namespace:LightBulb.Core;assembly=LightBulb.Core"
+  x:Name="DisplayControls"
+  x:DataType="vm:DisplayControlsViewModel"
+>
+  <UserControl.Styles>
+    <Style Selector="TextBlock.caption">
+      <Setter Property="Foreground" Value="{DynamicResource CandlelightMuted}" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="TextBlock.section">
+      <Setter Property="FontSize" Value="19" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button">
+      <Setter Property="MinHeight" Value="36" />
+    </Style>
+    <Style Selector="NumericUpDown">
+      <Setter Property="MinHeight" Value="38" />
+      <Setter Property="MinWidth" Value="92" />
+    </Style>
+    <Style Selector="ComboBox">
+      <Setter Property="MinHeight" Value="42" />
+    </Style>
+  </UserControl.Styles>
+  <Grid ColumnDefinitions="230,*">
+    <Border Background="{DynamicResource CandlelightRail}" Padding="18,22">
+      <Grid RowDefinitions="Auto,*,Auto">
+        <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,16">
+          <TextBlock
+            Text="Os teus ecrãs"
+            FontSize="18"
+            FontWeight="SemiBold"
+            VerticalAlignment="Center"
+          />
+          <Button
+            Grid.Column="1"
+            Command="{Binding RefreshDisplaysCommand}"
+            Content="↻"
+            Padding="8,0"
+            ToolTip.Tip="Atualizar monitores ligados"
+          />
+        </Grid>
+        <ListBox
+          Grid.Row="1"
+          ItemsSource="{Binding Displays}"
+          SelectedItem="{Binding SelectedDisplay}"
+          Background="Transparent"
+          BorderThickness="0"
+        >
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:DisplayItemViewModel">
+              <StackPanel Margin="4,10" Spacing="6">
+                <TextBlock
+                  Text="{Binding Name}"
+                  FontSize="16"
+                  FontWeight="SemiBold"
+                  TextWrapping="Wrap"
+                />
+                <TextBlock Text="{Binding Details}" Classes="caption" />
+                <TextBlock
+                  Text="{Binding Readout}"
+                  Foreground="{DynamicResource CandlelightAccent}"
+                  FontSize="14"
+                />
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+        <StackPanel Grid.Row="2" Spacing="12">
+          <TextBlock Text="Ao acordar o PC" FontWeight="SemiBold" />
+          <ToggleSwitch
+            IsChecked="{Binding IsWakeRecoveryEnabled}"
+            Content="Reforçar a reposição"
+            FontSize="13"
+          />
+          <TextBlock
+            Classes="caption"
+            Text="Repõe imediatamente a cor e insiste durante 5 segundos após a retoma."
+          />
+          <Button
+            Command="{Binding ReapplyCommand}"
+            Content="Reaplicar agora"
+            HorizontalAlignment="Stretch"
+            HorizontalContentAlignment="Center"
+          />
+          <TextBlock Classes="caption" Text="{Binding DriverStatus}" Foreground="#E6AF86" />
+        </StackPanel>
+      </Grid>
+    </Border>
+    <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Margin="30,24,30,24" Spacing="20" IsEnabled="{Binding HasDisplay}">
+        <TextBlock
+          Text="{Binding PreviewNotice}"
+          Foreground="{DynamicResource CandlelightAccent}"
+          FontSize="13"
+        />
+        <Grid ColumnDefinitions="*,Auto">
+          <StackPanel Spacing="4">
+            <TextBlock
+              Text="{Binding SelectedDisplay.Name}"
+              FontSize="28"
+              FontWeight="SemiBold"
+              TextWrapping="Wrap"
+            />
+            <TextBlock
+              Text="{Binding SelectedDisplay.Readout}"
+              Foreground="{DynamicResource CandlelightAccent}"
+              FontSize="20"
+            />
+          </StackPanel>
+          <ToggleSwitch
+            Grid.Column="1"
+            IsChecked="{Binding IsDisplayEnabled}"
+            Content="Ativo"
+            VerticalAlignment="Center"
+          />
+        </Grid>
+        <Grid ColumnDefinitions="*,24,*">
+          <StackPanel Spacing="6">
+            <TextBlock Text="Nome do ecrã" Classes="caption" />
+            <TextBox Text="{Binding DisplayName}" PlaceholderText="Nome do monitor" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" Spacing="6">
+            <TextBlock Text="Como ajustar" Classes="caption" />
+            <ComboBox
+              ItemsSource="{Binding Modes}"
+              SelectedIndex="{Binding ModeIndex}"
+              HorizontalAlignment="Stretch"
+            />
+          </StackPanel>
+        </Grid>
+        <ItemsControl ItemsSource="{Binding Presets}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="core:ColorPreset">
+              <Button
+                Content="{Binding Name}"
+                Margin="0,0,8,8"
+                Padding="14,8"
+                Command="{Binding #DisplayControls.DataContext.ApplyPresetCommand}"
+                CommandParameter="{Binding}"
+              />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <StackPanel IsVisible="{Binding IsManual}" Spacing="14">
+          <TextBlock Text="Valores fixos" Classes="section" />
+          <Grid ColumnDefinitions="*,116" RowDefinitions="Auto,Auto,Auto,Auto">
+            <TextBlock Text="Temperatura de cor" VerticalAlignment="Center" />
+            <NumericUpDown
+              Grid.Column="1"
+              Minimum="500"
+              Maximum="20000"
+              Increment="50"
+              FormatString="0' K'"
+              Value="{Binding Temperature}"
+            />
+            <Slider
+              Grid.Row="1"
+              Grid.ColumnSpan="2"
+              Minimum="500"
+              Maximum="20000"
+              Value="{Binding Temperature}"
+              TickFrequency="50"
+              IsSnapToTickEnabled="True"
+              Margin="0,6,0,16"
+            />
+            <TextBlock Grid.Row="2" Text="Brilho" VerticalAlignment="Center" />
+            <NumericUpDown
+              Grid.Row="2"
+              Grid.Column="1"
+              Minimum="1"
+              Maximum="100"
+              Increment="1"
+              FormatString="0' %'"
+              Value="{Binding Brightness}"
+            />
+            <Slider
+              Grid.Row="3"
+              Grid.ColumnSpan="2"
+              Minimum="1"
+              Maximum="100"
+              Value="{Binding Brightness}"
+              TickFrequency="1"
+              IsSnapToTickEnabled="True"
+              Margin="0,6,0,0"
+            />
+          </Grid>
+          <TextBlock
+            Classes="caption"
+            Text="500 K suprime os canais verde e azul. O brilho é reduzido por software, sem alterar o brilho físico do monitor."
+          />
+        </StackPanel>
+        <StackPanel IsVisible="{Binding IsSunCycle}" Spacing="12">
+          <TextBlock Text="Dia e noite neste ecrã" Classes="section" />
+          <Grid
+            ColumnDefinitions="*,130,130"
+            RowDefinitions="Auto,Auto,Auto"
+            ColumnSpacing="12"
+            RowSpacing="10"
+          >
+            <TextBlock Grid.Column="1" Text="Cor (K)" Classes="caption" />
+            <TextBlock Grid.Column="2" Text="Brilho (%)" Classes="caption" />
+            <TextBlock Grid.Row="1" Text="Durante o dia" VerticalAlignment="Center" />
+            <NumericUpDown
+              Grid.Row="1"
+              Grid.Column="1"
+              Minimum="500"
+              Maximum="20000"
+              Increment="50"
+              Value="{Binding DayTemperature}"
+            />
+            <NumericUpDown
+              Grid.Row="1"
+              Grid.Column="2"
+              Minimum="1"
+              Maximum="100"
+              Value="{Binding DayBrightness}"
+            />
+            <TextBlock Grid.Row="2" Text="Durante a noite" VerticalAlignment="Center" />
+            <NumericUpDown
+              Grid.Row="2"
+              Grid.Column="1"
+              Minimum="500"
+              Maximum="20000"
+              Increment="50"
+              Value="{Binding NightTemperature}"
+            />
+            <NumericUpDown
+              Grid.Row="2"
+              Grid.Column="2"
+              Minimum="1"
+              Maximum="100"
+              Value="{Binding NightBrightness}"
+            />
+          </Grid>
+          <TextBlock
+            Classes="caption"
+            Text="As horas de nascer/pôr do sol e a duração da transição estão nas definições avançadas. Para escolher cada hora, usa o modo Horários."
+          />
+        </StackPanel>
+        <StackPanel IsVisible="{Binding IsSchedule}" Spacing="12">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="O teu dia, hora a hora" Classes="section" VerticalAlignment="Center" />
+            <Button
+              Grid.Column="1"
+              Command="{Binding UseExampleScheduleCommand}"
+              Content="Usar exemplo diário"
+            />
+          </Grid>
+          <TextBlock
+            Classes="caption"
+            Text="Cada hora inicia a mudança para esses valores. A transição indica quantos minutos demora; 0 muda imediatamente. Repete todos os dias, incluindo a passagem da meia-noite."
+          />
+          <Grid ColumnDefinitions="90,*,*,*,42" ColumnSpacing="8">
+            <TextBlock Text="Hora (24 h)" Classes="caption" />
+            <TextBlock Grid.Column="1" Text="Cor (K)" Classes="caption" />
+            <TextBlock Grid.Column="2" Text="Brilho (%)" Classes="caption" />
+            <TextBlock Grid.Column="3" Text="Transição (min)" Classes="caption" />
+          </Grid>
+          <ItemsControl ItemsSource="{Binding Schedule}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:SchedulePointViewModel">
+                <Grid ColumnDefinitions="90,*,*,*,42" ColumnSpacing="8" Margin="0,0,0,8">
+                  <TextBox
+                    Text="{Binding Time}"
+                    PlaceholderText="22:00"
+                    ToolTip.Tip="Hora no formato HH:mm"
+                  />
+                  <NumericUpDown
+                    Grid.Column="1"
+                    Minimum="500"
+                    Maximum="20000"
+                    Increment="50"
+                    Value="{Binding Temperature}"
+                  />
+                  <NumericUpDown
+                    Grid.Column="2"
+                    Minimum="1"
+                    Maximum="100"
+                    Value="{Binding Brightness}"
+                  />
+                  <NumericUpDown
+                    Grid.Column="3"
+                    Minimum="0"
+                    Maximum="1440"
+                    Increment="5"
+                    Value="{Binding TransitionMinutes}"
+                  />
+                  <Button
+                    Grid.Column="4"
+                    Content="×"
+                    Padding="8,0"
+                    ToolTip.Tip="Remover horário"
+                    Command="{Binding #DisplayControls.DataContext.RemoveSchedulePointCommand}"
+                    CommandParameter="{Binding}"
+                  />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Button
+            Command="{Binding AddSchedulePointCommand}"
+            Content="Adicionar horário"
+            HorizontalAlignment="Left"
+          />
+          <TextBlock Text="{Binding ScheduleError}" TextWrapping="Wrap" Foreground="#E6AF86" />
+        </StackPanel>
+        <Border Height="1" Background="{DynamicResource CandlelightLine}" />
+        <StackPanel Spacing="12">
+          <TextBlock Text="Presets num clique" Classes="section" />
+          <TextBlock
+            Classes="caption"
+            Text="Aplica apenas ao ecrã selecionado e muda para o modo Manual."
+          />
+          <ItemsControl ItemsSource="{Binding Presets}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="core:ColorPreset">
+                <Grid ColumnDefinitions="*,Auto" Margin="0,0,10,10">
+                  <Button
+                    Command="{Binding #DisplayControls.DataContext.ApplyPresetCommand}"
+                    CommandParameter="{Binding}"
+                    Padding="14,10"
+                  >
+                    <StackPanel Spacing="4">
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                      <TextBlock FontSize="12" Foreground="{DynamicResource CandlelightMuted}">
+                        <Run Text="{Binding Configuration.Temperature, StringFormat={}{0:0} K}" />
+                        <Run Text=" · " />
+                        <Run Text="{Binding Configuration.Brightness, StringFormat={}{0:P0}}" />
+                      </TextBlock>
+                    </StackPanel>
+                  </Button>
+                  <Button
+                    Grid.Column="1"
+                    Content="×"
+                    Padding="6,0"
+                    ToolTip.Tip="Apagar preset"
+                    Command="{Binding #DisplayControls.DataContext.DeletePresetCommand}"
+                    CommandParameter="{Binding}"
+                  />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+            <TextBox Text="{Binding PresetName}" PlaceholderText="Nome do novo preset" />
+            <Button
+              Grid.Column="1"
+              Command="{Binding SavePresetCommand}"
+              Content="Guardar valores atuais"
+            />
+          </Grid>
+          <TextBlock
+            Text="{Binding Feedback}"
+            TextWrapping="Wrap"
+            Foreground="{DynamicResource CandlelightAccent}"
+          />
+        </StackPanel>
+        <TextBlock Text="{Binding SaveStatus}" Classes="caption" />
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

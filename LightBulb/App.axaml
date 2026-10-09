@@ -137,9 +137,21 @@
       <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Default">
           <SolidColorBrush x:Key="ToggleBackgroundBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="CandlelightSurface" Color="#F1EFEB" />
+          <SolidColorBrush x:Key="CandlelightRail" Color="#E5E2DA" />
+          <SolidColorBrush x:Key="CandlelightText" Color="#33291F" />
+          <SolidColorBrush x:Key="CandlelightMuted" Color="#706459" />
+          <SolidColorBrush x:Key="CandlelightAccent" Color="#86652E" />
+          <SolidColorBrush x:Key="CandlelightLine" Color="#C6BDAE" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
           <SolidColorBrush x:Key="ToggleBackgroundBrush" Color="#8E8E8E" />
+          <SolidColorBrush x:Key="CandlelightSurface" Color="#171411" />
+          <SolidColorBrush x:Key="CandlelightRail" Color="#211B17" />
+          <SolidColorBrush x:Key="CandlelightText" Color="#DFCEC3" />
+          <SolidColorBrush x:Key="CandlelightMuted" Color="#B6A699" />
+          <SolidColorBrush x:Key="CandlelightAccent" Color="#D8B46E" />
+          <SolidColorBrush x:Key="CandlelightLine" Color="#44372C" />
         </ResourceDictionary>
       </ResourceDictionary.ThemeDictionaries>
 
@@ -192,6 +204,30 @@
               Header="{Binding LocalizationManager.TraySettingsMenuItem}"
             />
             <NativeMenuItemSeparator />
+            <NativeMenuItem Header="Presets no ecrã selecionado">
+              <NativeMenu>
+                <NativeMenuItem
+                  Header="Dia"
+                  Command="{Binding Dashboard.Displays.ApplyPresetByIdCommand}"
+                  CommandParameter="day"
+                />
+                <NativeMenuItem
+                  Header="Leitura"
+                  Command="{Binding Dashboard.Displays.ApplyPresetByIdCommand}"
+                  CommandParameter="reading"
+                />
+                <NativeMenuItem
+                  Header="Noite"
+                  Command="{Binding Dashboard.Displays.ApplyPresetByIdCommand}"
+                  CommandParameter="night"
+                />
+                <NativeMenuItem
+                  Header="OLED vermelho"
+                  Command="{Binding Dashboard.Displays.ApplyPresetByIdCommand}"
+                  CommandParameter="oled-red"
+                />
+              </NativeMenu>
+            </NativeMenuItem>
             <NativeMenuItem
               Command="{Binding Dashboard.ToggleCommand}"
               Header="{Binding LocalizationManager.TrayDisableMenuItem}"

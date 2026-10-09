@@ -11,3 +11,6 @@ Installer/Source/
 
 # Test results
 TestResults/
+.tools/
+artifacts/
+Settings.json

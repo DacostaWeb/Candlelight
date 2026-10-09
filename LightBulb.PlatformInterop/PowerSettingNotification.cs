@@ -13,7 +13,10 @@ public partial class PowerSettingNotification(nint handle, Guid powerSettingId, 
         m =>
         {
             // Filter out other power events
-            if (m.TryGetLParam<PowerBroadcastSetting>()?.PowerSettingId != powerSettingId)
+            if (
+                m.WParam != 0x8013
+                || m.TryGetLParam<PowerBroadcastSetting>()?.PowerSettingId != powerSettingId
+            )
                 return;
 
             callback();
@@ -37,6 +40,29 @@ public partial class PowerSettingNotification(nint handle, Guid powerSettingId, 
 
 public partial class PowerSettingNotification
 {
+    public static IDisposable? TryRegisterDisplayState(Guid powerSettingId, Action<int> callback)
+    {
+        var registration = TryRegister(powerSettingId, () => { });
+        if (registration is null)
+            return null;
+
+        var listener = WndProcSponge.Default.Listen(
+            0x218,
+            message =>
+            {
+                if (
+                    message.WParam != 0x8013
+                    || message.TryGetLParam<PowerBroadcastSetting>() is not { } setting
+                    || setting.DataLength < 4
+                )
+                    return;
+
+                callback(Marshal.ReadInt32(message.LParam, 20));
+            }
+        );
+        return PowerKit.Disposable.Merge(listener, registration);
+    }
+
     public static PowerSettingNotification? TryRegister(Guid powerSettingId, Action callback)
     {
         var handle = NativeMethods.RegisterPowerSettingNotification(

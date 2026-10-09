@@ -8,6 +8,25 @@ internal static partial class NativeMethods
 {
     private const string User32 = "user32.dll";
 
+    [DllImport(
+        User32,
+        EntryPoint = "EnumDisplayDevicesW",
+        CharSet = CharSet.Unicode,
+        SetLastError = true
+    )]
+    public static extern bool EnumDisplayDevices(
+        string deviceName,
+        uint index,
+        ref DisplayDevice device,
+        uint flags
+    );
+
+    [DllImport("wtsapi32.dll", SetLastError = true)]
+    public static extern bool WTSRegisterSessionNotification(nint window, uint flags);
+
+    [DllImport("wtsapi32.dll", SetLastError = true)]
+    public static extern bool WTSUnRegisterSessionNotification(nint window);
+
     [DllImport(User32, SetLastError = true)]
     public static extern bool EnumDisplayMonitors(
         nint hdc,
@@ -107,7 +126,7 @@ internal static partial class NativeMethods
     [DllImport(User32, SetLastError = true)]
     public static extern nint RegisterPowerSettingNotification(
         nint hRecipient,
-        Guid powerSettingGuid,
+        in Guid powerSettingGuid,
         int flags
     );
 

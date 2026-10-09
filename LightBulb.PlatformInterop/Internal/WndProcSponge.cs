@@ -101,7 +101,9 @@ internal partial class WndProcSponge
             0,
             0,
             0,
-            -3, // HWND_MESSAGE
+            // A message-only window does not receive broadcasts (WM_DISPLAYCHANGE and
+            // WM_POWERBROADCAST). Use an invisible top-level window instead.
+            0,
             0,
             0,
             0

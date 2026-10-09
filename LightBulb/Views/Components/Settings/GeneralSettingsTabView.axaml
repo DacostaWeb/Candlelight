@@ -7,6 +7,10 @@
   x:DataType="settings:GeneralSettingsTabViewModel"
 >
   <StackPanel Margin="16" Orientation="Vertical" Spacing="24">
+    <TextBlock
+      Text="Os valores de dia/noite são usados para novos monitores. Ajusta os monitores já ligados na janela principal. A duração e o desvio da transição aplicam-se a todos os monitores no modo Dia / noite."
+      TextWrapping="Wrap"
+    />
     <!--  Day temperature  -->
     <StackPanel Orientation="Vertical" Spacing="12">
       <Grid

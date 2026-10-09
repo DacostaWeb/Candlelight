@@ -1,3 +1,72 @@
+# Candlelight
+
+A Windows fork of [LightBulb](https://github.com/Tyrrrz/LightBulb) with independent
+monitor profiles, exact-zero red-only output, quick presets and custom daily
+schedules. Initial version: **0.1.0**.
+
+- Each connected monitor has its own temperature and software brightness (1–100%).
+- Choose **Dia / noite**, **Manual**, or **Horários** for each screen.
+- **OLED vermelho** sets 500 K and 15% brightness on the selected monitor only.
+- Presets can be saved, replaced by name, deleted and applied with one click.
+  Built-in presets are also available from the tray for the last selected monitor.
+- Daily schedules accept any `HH:mm`, temperature, brightness and transition
+  duration. Zero minutes switches instantly; other values start a smooth transition
+  at that time. Schedules wrap midnight and repeat every day. Overlapping transitions
+  are shortened to end at the next point. Invalid or duplicate times retain the last
+  valid schedule.
+- Resume, display power-on and unlock reapply current values immediately, followed
+  by five seconds of retries. Startup skips the daylight-to-night fade.
+- Physical EDID identity preserves profiles across HDMI/USB-C when the monitor
+  reports the same serial. Devices without usable serials use the connection path.
+- The app and settings use the Candlelight name. Updates from original LightBulb
+  cannot overwrite this fork.
+
+## Run
+
+![Candlelight interface in preview mode](docs/interface.png)
+
+Extract the portable package and run **Candlelight.exe**. Close original LightBulb,
+Ahead or other gamma tools first so they do not overwrite each other. Choose the
+OLED in the left rail, apply **OLED vermelho**, then adjust its brightness. Set the
+internal screen's brightness to 100% separately. Changes save automatically.
+
+This version targets SDR displays in an extended desktop. Windows/driver gamma
+resets can occur before an application receives a resume event, so elimination of
+every flash is not guaranteed. HDMI monitor discovery was verified locally; real
+sleep/hibernation, gamma readback and switching back to USB-C remain hardware checks.
+Night Light handover is an experimental proposal, not an implemented feature.
+See [wake recovery details](docs/wake-recovery.md).
+
+Settings are stored beside a writable portable executable, or in
+`%APPDATA%/Candlelight/Settings.json` for an installation. `CANDLELIGHT_SETTINGS_PATH`
+can override this. Existing LightBulb settings are not automatically imported.
+
+## Build and verify
+
+Requires .NET SDK 10 on Windows.
+
+```powershell
+dotnet build LightBulb.slnx --configuration Release
+dotnet test LightBulb.Core.Tests --configuration Release --no-build
+dotnet LightBulb/bin/Release/net10.0-windows/Candlelight.dll --preview --capture-preview=artifacts/ui
+./scripts/publish.ps1
+```
+
+`--preview` uses synthetic monitors and never writes hardware gamma or autostart
+registry values. `--capture-preview=...` verifies the compiled controls, captures
+three interface states and exits. `--list-displays` reports detected displays
+without changing colors. CI builds a self-contained Windows x64 portable ZIP.
+Installer source is rebranded but an installer is not distributed with v0.1.0.
+
+The exact-zero color/ramp handling is adapted from
+[LightBulb Ahead](https://github.com/karipesonen/LightBulb-Ahead).
+See [third-party credits](THIRD_PARTY.md) and the preserved [MIT license](License.txt).
+
+## Original LightBulb documentation
+
+The following section describes upstream LightBulb; its downloads refer to the
+original program.
+
 # LightBulb
 
 [![Status](https://img.shields.io/badge/status-maintenance-ffd700.svg)](https://github.com/Tyrrrz/.github/blob/prime/docs/project-status.md)

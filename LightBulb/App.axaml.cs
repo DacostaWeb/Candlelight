@@ -50,6 +50,7 @@ public partial class App : Application, IDisposable
         // View models
         services.AddTransient<MainViewModel>();
         services.AddSingleton<DashboardViewModel>();
+        services.AddSingleton<DisplayControlsViewModel>();
         services.AddTransient<MessageBoxViewModel>();
         services.AddTransient<SettingsViewModel>();
         services.AddTransient<SettingsTabViewModelBase, AdvancedSettingsTabViewModel>();
@@ -101,13 +102,22 @@ public partial class App : Application, IDisposable
         this.LocateMaterialTheme<MaterialThemeBase>().CurrentTheme =
             actualTheme == PlatformThemeVariant.Light
                 ? Theme.Create(Theme.Light, Color.Parse("#343838"), Color.Parse("#F9A825"))
-                : Theme.Create(Theme.Dark, Color.Parse("#E8E8E8"), Color.Parse("#F9A825"));
+                : Theme.Create(Theme.Dark, Color.Parse("#DFCEC3"), Color.Parse("#D8B46E"));
     }
 
     public override void OnFrameworkInitializationCompleted()
     {
         // Load settings
         _settingsService.Load();
+
+        RequestedThemeVariant = _settingsService.Theme switch
+        {
+            ThemeVariant.Light => Avalonia.Styling.ThemeVariant.Light,
+            ThemeVariant.Dark => Avalonia.Styling.ThemeVariant.Dark,
+            _ => Avalonia.Styling.ThemeVariant.Default,
+        };
+
+        _ = _mainViewModel.Dashboard.InitializeAsync();
 
         // Initialize the lifetime
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)

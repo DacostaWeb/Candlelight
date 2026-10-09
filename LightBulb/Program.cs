@@ -17,14 +17,14 @@ public static class Program
 
     public static string VersionString { get; } = Version.ToString(3);
 
-    public static bool IsDevelopmentBuild { get; } = Version.Major is <= 0 or >= 999;
+    public static bool IsDevelopmentBuild { get; } = Version.Major >= 999;
 
     public static string ExecutableDirPath { get; } = AppContext.BaseDirectory;
 
     public static string ExecutableFilePath { get; } =
         Path.ChangeExtension(Assembly.Location, "exe");
 
-    public static string ProjectUrl { get; } = "https://github.com/Tyrrrz/LightBulb";
+    public static string ProjectUrl { get; } = "https://github.com/DacostaWeb/Candlelight";
 
     public static string ProjectReleasesUrl { get; } = $"{ProjectUrl}/releases";
 
@@ -48,10 +48,26 @@ public static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        if (
+            Array.Exists(args, a => a.Equals("--list-displays", StringComparison.OrdinalIgnoreCase))
+        )
+        {
+            foreach (var monitor in LightBulb.PlatformInterop.Monitor.GetAll())
+            {
+                using (monitor)
+                {
+                    if (monitor.TryGetDisplayInfo() is { } info)
+                        Console.WriteLine(
+                            $"{info.Name} | {info.DeviceName} | {info.Bounds.Right - info.Bounds.Left}x{info.Bounds.Bottom - info.Bounds.Top} | {(info.IsPrimary ? "primary" : "secondary")} | physical identity: {info.Id.StartsWith("edid:")}"
+                        );
+                }
+            }
+            return 0;
+        }
         // Ensure only one instance of the app is running at a time
         using var identityMutex = new Mutex(
             true,
-            $"{Name}_Identity",
+            $"{Name}_Identity{(StartOptions.Current.IsPreview ? "_Preview" : "")}",
             out var isOnlyRunningInstance
         );
 
