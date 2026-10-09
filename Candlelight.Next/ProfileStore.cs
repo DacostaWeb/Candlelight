@@ -9,6 +9,7 @@ internal sealed record Preset(string Name, ColorProfile Profile);
 internal sealed record AppSettings
 {
     public int Schema { get; init; } = 1;
+    public bool FilterCursor { get; set; } = true;
     public List<MonitorProfile> Monitors { get; set; } = [];
     public List<Preset> Presets { get; set; } =
     [

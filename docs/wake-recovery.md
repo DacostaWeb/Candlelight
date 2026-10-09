@@ -196,7 +196,12 @@ The global desktop effect subsequently filtered the taskbar, physically
 confirmed by the user at 2700 K / 100% with the control window hidden and Night
 Light off. This applies only when connected monitors share one enabled profile.
 Different profiles still use the windowed path and need a shell coverage solution.
-The global effect's sleep/resume behavior remains a separate physical test.
+The user subsequently reported that wake behavior appeared to work. Repeated
+physical suspension and hibernation remain separate verification gates.
+The global effect left the hardware mouse cursor unfiltered. A temporary minimum
+trail made it warm, but the user rejected the trail and it was removed. Version
+0.2.2 uses temporary standard cursor bitmap copies instead; see the cursor
+limitations and restoration behavior in [the prototype documentation](next-engine.md).
 
 Sources:
 

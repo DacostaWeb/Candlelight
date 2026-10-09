@@ -9,6 +9,7 @@ internal sealed class ProfileController : IDisposable
     private readonly CancellationTokenSource _stop = new();
     private readonly SemaphoreSlim _apply = new(1);
     private readonly Dictionary<string, (ColorProfile Profile, bool Enabled)> _last = new();
+    private bool? _lastCursorFiltering;
     private readonly Task _loop;
     public MagnificationEngine Engine { get; }
     public string? Error { get; private set; }
@@ -52,7 +53,13 @@ internal sealed class ProfileController : IDisposable
         {
             _store.EnsureDisplays(DisplayCatalog.GetDisplays());
             var now = TimeOnly.FromDateTime(DateTime.Now);
-            foreach (var monitor in _store.Read().Monitors)
+            var settings = _store.Read();
+            if (_lastCursorFiltering != settings.FilterCursor)
+            {
+                await Engine.SetCursorFilteringAsync(settings.FilterCursor);
+                _lastCursorFiltering = settings.FilterCursor;
+            }
+            foreach (var monitor in settings.Monitors)
             {
                 var target = (monitor.Evaluate(now), monitor.Enabled);
                 if (!_last.TryGetValue(monitor.Id, out var last) || last != target)

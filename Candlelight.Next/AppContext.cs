@@ -71,7 +71,7 @@ internal sealed class AppContext : ApplicationContext
         _ = ServeAsync();
         if (!hidden)
             Show();
-        Log("Started 0.2.1. UI and renderer have independent lifetimes. Settings=" + store.Path);
+        Log("Started 0.2.2. UI and renderer have independent lifetimes. Settings=" + store.Path);
     }
 
     private static string AppContextBase() => System.AppContext.BaseDirectory;
@@ -196,12 +196,18 @@ internal sealed class AppContext : ApplicationContext
             case "probe-resume":
                 await _controller.Engine.ExerciseSuspendAsync(false);
                 break;
+            case "cursor-on":
+            case "cursor-off":
+                _store.Update(settings => settings.FilterCursor = request.Command == "cursor-on");
+                await _controller.ApplyNowAsync();
+                _window.Reload();
+                break;
             default:
                 throw new ArgumentException("Unknown command.");
         }
         return new
         {
-            version = "0.2.1",
+            version = "0.2.2",
             windowVisible = _window.Visible,
             error = _controller.Error,
             engine = await _controller.Engine.InspectAsync(),

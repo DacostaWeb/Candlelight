@@ -17,6 +17,8 @@ internal static class Program
         }
         string? Option(string name) =>
             Array.Find(args, a => a.StartsWith(name + "="))?[(name.Length + 1)..];
+        if (Option("--probe-cursors") is { } cursorProbe)
+            return CursorProbe.Run(cursorProbe);
         if (Option("--command") is { } command)
             return SendCommand(
                 new(
@@ -158,7 +160,7 @@ internal static class Program
                 );
                 File.WriteAllText(
                     Path.Combine(directory, "verification.txt"),
-                    "PASS: compiled control window, 4000/2700 K edits, exact red preset, per-monitor isolation, schedule enable. No real renderer started."
+                    "PASS: compiled control window, 4000/2700 K edits, exact red preset, per-monitor isolation, schedule enable, cursor option. No real renderer started."
                 );
             }
             catch (Exception error)

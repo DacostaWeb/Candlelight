@@ -3,7 +3,7 @@
     <OutputType>WinExe</OutputType>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>0.2.1</Version>
+    <Version>0.2.2</Version>
     <AssemblyName>Candlelight.Next</AssemblyName>
     <ApplicationIcon>../favicon.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>

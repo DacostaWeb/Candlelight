@@ -16,6 +16,12 @@ internal sealed class ControlWindow : Form
         _presets = new DarkComboBox();
     private readonly CheckBox _enabled = new() { Text = "Filtro ativo", AutoSize = true };
     private readonly CheckBox _red = new() { Text = "Vermelho puro", AutoSize = true };
+    private readonly CheckBox _filterCursor = new()
+    {
+        Text = "Filtrar ponteiro",
+        AutoSize = true,
+        Margin = new(20, 3, 0, 3),
+    };
     private readonly CheckBox _scheduled = new()
     {
         Text = "Usar horários neste monitor",
@@ -150,7 +156,11 @@ internal sealed class ControlWindow : Form
         _temperatureSlider.Dock = DockStyle.Fill;
         temperaturePanel.Controls.Add(_temperatureSlider, 0, 1);
         temperaturePanel.Controls.Add(WithUnit(_temperature, "K"), 1, 1);
-        temperaturePanel.Controls.Add(_red, 0, 2);
+        var colorOptions = Flow();
+        colorOptions.Controls.Add(_red);
+        colorOptions.Controls.Add(_filterCursor);
+        temperaturePanel.Controls.Add(colorOptions, 0, 2);
+        temperaturePanel.SetColumnSpan(colorOptions, 2);
         root.Controls.Add(temperaturePanel, 0, 2);
 
         var brightnessPanel = new TableLayoutPanel
@@ -251,6 +261,11 @@ internal sealed class ControlWindow : Form
             if (!_loading)
                 EditMonitor(m => m.Enabled = _enabled.Checked);
         };
+        _filterCursor.CheckedChanged += (_, _) =>
+        {
+            if (!_loading)
+                Change(settings => settings.FilterCursor = _filterCursor.Checked);
+        };
         _scheduled.CheckedChanged += (_, _) =>
         {
             if (!_loading)
@@ -336,6 +351,7 @@ internal sealed class ControlWindow : Form
                 : $"{state?.Profile.Temperature:0} K";
         _status.Text =
             _controller?.Error
+            ?? snapshot.CursorError
             ?? state?.Error
             ?? (
                 state is null ? "Monitor desligado; perfil guardado."
@@ -385,6 +401,9 @@ internal sealed class ControlWindow : Form
     {
         var settings = _store.Read();
         var profile = settings.Monitors.FirstOrDefault(m => m.Id == SelectedId);
+        _loading = true;
+        _filterCursor.Checked = settings.FilterCursor;
+        _loading = false;
         if (profile is null)
             return;
         _loading = true;
@@ -438,6 +457,11 @@ internal sealed class ControlWindow : Form
         if (!_store.Read().Monitors.Single(m => m.Id == SelectedId).Scheduled)
             throw new InvalidOperationException("Schedule binding failed.");
         ApplyPreset(new(ColorMode.Temperature, 2700, 1));
+        _filterCursor.Checked = false;
+        Reload();
+        if (_filterCursor.Checked || _store.Read().FilterCursor)
+            throw new InvalidOperationException("Cursor option binding failed.");
+        _filterCursor.Checked = true;
     }
 
     private void EditMonitor(Action<MonitorProfile> edit) =>

@@ -12,6 +12,6 @@ if ($LASTEXITCODE -ne 0) { throw 'Publishing Candlelight Next failed.' }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'License.txt'), (Join-Path $projectRoot 'THIRD_PARTY.md') -Destination $outputDir
 Copy-Item -LiteralPath (Join-Path $projectRoot 'docs/next-engine.md') -Destination (Join-Path $outputDir 'ReadMe.md')
 Copy-Item -LiteralPath (Join-Path $projectRoot 'docs/next-interface.png') -Destination $outputDir
-$packageFiles = Get-ChildItem -LiteralPath $outputDir | Where-Object { $_.Name -notin @('Settings.json', 'Settings.json.tmp', 'Renderer.log', 'Renderer.log.old', '.installed') }
+$packageFiles = Get-ChildItem -LiteralPath $outputDir | Where-Object { $_.Name -notin @('Settings.json', 'Settings.json.tmp', 'SystemCursorLease.json', 'SystemCursorLease.json.tmp', 'Renderer.log', 'Renderer.log.old', '.installed') }
 Compress-Archive -LiteralPath $packageFiles.FullName -DestinationPath "$outputDir.zip" -Force
 Write-Output "$outputDir.zip"

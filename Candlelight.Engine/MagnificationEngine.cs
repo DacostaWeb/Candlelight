@@ -19,7 +19,9 @@ public sealed record EngineSnapshot(
     bool Locked,
     long Timestamp,
     string Renderer,
-    bool DesktopEffectVerified
+    bool DesktopEffectVerified,
+    bool SystemCursorsFiltered,
+    string? CursorError
 );
 
 /// <summary>
@@ -58,6 +60,9 @@ public sealed class MagnificationEngine : IDisposable
     private ColorProfile? _desktopProfile;
     private bool _desktopBlack;
     private long _desktopUpdates;
+    private SystemCursorFilter? _systemCursors;
+    private bool _filterCursors = true;
+    private string? _cursorError;
 
     public event Action<EngineSnapshot>? StatusChanged;
     public Task Ready => _started.Task;
@@ -93,6 +98,18 @@ public sealed class MagnificationEngine : IDisposable
     }
 
     public Task RefreshDisplaysAsync() => DispatchAsync(SynchronizeDisplays);
+
+    public Task SetCursorFilteringAsync(bool enabled) =>
+        DispatchAsync(() =>
+        {
+            _filterCursors = enabled;
+            foreach (var presenter in _presenters.Values)
+                presenter.Dispose();
+            _presenters.Clear();
+            SynchronizeDisplays();
+            UpdateSystemCursors();
+            PublishStatus();
+        });
 
     // The probe invokes the same paths as native power notifications, without
     // suspending the user's PC. This does not replace a physical wake test.
@@ -136,6 +153,7 @@ public sealed class MagnificationEngine : IDisposable
             if (!Native.MagInitialize())
                 throw Error("MagInitialize");
             _initialized = true;
+            _systemCursors = new(_log);
             var windowClass = new Native.WindowClass
             {
                 Size = (uint)Marshal.SizeOf<Native.WindowClass>(),
@@ -196,6 +214,8 @@ public sealed class MagnificationEngine : IDisposable
         finally
         {
             RestoreDesktopEffect();
+            _systemCursors?.Dispose();
+            _systemCursors = null;
             if (_cursorHidden)
                 Native.MagShowSystemCursor(true);
             foreach (var presenter in _presenters.Values)
@@ -377,7 +397,7 @@ public sealed class MagnificationEngine : IDisposable
         {
             if (!_presenters.TryGetValue(display.Id, out var presenter))
             {
-                presenter = new Presenter(display, _className);
+                presenter = new Presenter(display, _className, _filterCursors);
                 _presenters.Add(display.Id, presenter);
             }
             presenter.SetBounds(display);
@@ -411,6 +431,32 @@ public sealed class MagnificationEngine : IDisposable
         _desktopBlack = black;
         _desktopEffect = effect;
         _desktopUpdates++;
+        UpdateSystemCursors();
+    }
+
+    private void UpdateSystemCursors()
+    {
+        try
+        {
+            var gain = _desktopProfile is not null
+                ? ChannelGain.FromProfile(_desktopProfile)
+                : new(1, 1, 1);
+            if (
+                _filterCursors
+                && _desktopProfile is not null
+                && !_locked
+                && (_desktopBlack || gain != new ChannelGain(1, 1, 1))
+            )
+                _systemCursors?.Apply(_desktopBlack ? new(0, 0, 0) : gain);
+            else
+                _systemCursors?.Restore();
+            _cursorError = null;
+        }
+        catch (Exception error)
+        {
+            _cursorError = "Não foi possível filtrar o ponteiro.";
+            _log?.Invoke("Cursor filter failed: " + error);
+        }
     }
 
     private void RestoreDesktopEffect()
@@ -424,6 +470,7 @@ public sealed class MagnificationEngine : IDisposable
         )
             Native.MagSetFullscreenColorEffect(ref _desktopPrevious);
         _desktopProfile = null;
+        UpdateSystemCursors();
     }
 
     private void Tick()
@@ -439,6 +486,15 @@ public sealed class MagnificationEngine : IDisposable
             if (Environment.TickCount64 - _lastStatus >= 1000)
             {
                 _lastStatus = Environment.TickCount64;
+                try
+                {
+                    _systemCursors?.Refresh();
+                }
+                catch (Exception error)
+                {
+                    _cursorError = "Não foi possível atualizar o ponteiro.";
+                    _log?.Invoke(error.ToString());
+                }
                 PublishStatus();
             }
             return;
@@ -446,7 +502,8 @@ public sealed class MagnificationEngine : IDisposable
         if (Native.GetCursorPos(out var cursor))
         {
             var hide =
-                !_locked
+                _filterCursors
+                && !_locked
                 && _presenters.Values.Any(p =>
                     cursor.X >= p.Display.Left
                     && cursor.X < p.Display.Left + p.Display.Width
@@ -505,7 +562,9 @@ public sealed class MagnificationEngine : IDisposable
             _desktopProfile is not null ? "Desktop" : "PerMonitorWindows",
             _desktopProfile is not null
                 && Native.MagGetFullscreenColorEffect(out var current)
-                && current.Values.SequenceEqual(_desktopEffect.Values)
+                && current.Values.SequenceEqual(_desktopEffect.Values),
+            _systemCursors?.Active == true,
+            _cursorError
         );
 
     private void PublishStatus()
@@ -548,7 +607,7 @@ public sealed class MagnificationEngine : IDisposable
         private Native.ColorEffect _effect;
         private bool _shown;
 
-        public Presenter(DisplayDescriptor display, string hostClass)
+        public Presenter(DisplayDescriptor display, string hostClass, bool filterCursor)
         {
             Display = display;
             Host = Native.CreateWindowEx(
@@ -575,7 +634,7 @@ public sealed class MagnificationEngine : IDisposable
                     0,
                     "Magnifier",
                     null,
-                    0x50000001,
+                    filterCursor ? 0x50000001u : 0x50000000u,
                     0,
                     0,
                     display.Width,

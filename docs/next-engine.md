@@ -21,6 +21,8 @@ handover, gamma ramps, private color-system exports or Night Light writes.
   so a requested red-only period never fades through green/blue.
 - Closing the control window hides it. **Sair** in the tray exits the renderer.
   Rendering and schedule evaluation run independently of that window.
+- **Filtrar ponteiro** colors standard Windows cursors without mouse trails.
+  Turning it off, pausing the filter or exiting restores the original cursors.
 
 The first version omits location, sunrise/sunset, application exceptions,
 theme settings and the original updater.
@@ -32,11 +34,38 @@ When all connected monitors have the same enabled profile (including the current
 single internal panel), `MagSetFullscreenColorEffect` applies the 5x5 color matrix
 to the entire desktop. This includes the Windows taskbar without an overlay above
 it. The real user confirmed taskbar coverage at 2700 K / 100% on this machine.
-The ordinary system cursor is retained. The preceding desktop effect is saved and
+The preceding desktop effect is saved and
 restored when the filter is paused or the app exits, provided another application
 has not replaced it. Resume uses a black desktop effect for 300 ms before the
 desired color. Matrix readback is exposed as `DesktopEffectVerified`; it is not
 a measurement of panel light or proof of physical wake behavior.
+
+### Cursor filtering without trails (0.2.2)
+
+On this driver, the desktop color effect leaves the hardware cursor white.
+A temporary minimum mouse-trails experiment made it warm, including over the
+taskbar, but the user rejected the visible trail. Trails were restored to zero;
+the application never changes that Windows setting.
+
+The desktop path now makes temporary colored copies of 13 standard Windows
+cursor shapes using `GetIconInfo`, `CreateIconIndirect` and `SetSystemCursor`.
+It preserves dimensions, click hotspots, alpha and black outlines, and applies
+the current temperature/brightness or exact-red gains to their pixels. Copies
+come from the original images, so profile changes never compound their tint.
+The normal preset retains the original shapes. No cursor scheme or registry
+setting is written. The original native handles are copied back on pause, exit
+or switching to the per-monitor renderer. A changed Windows cursor theme is
+rebased without restoring over the user's new shapes.
+
+A local `SystemCursorLease.json` records ownership and original pixels for
+recovery on the next launch after an interrupted exit. Only still-owned shapes
+are recovered, including when cursor filtering is disabled. Normal exit restores
+native cursor copies; recovery after a crash can restore only static pixels.
+Monochrome background-inverting strokes become colored strokes with a black
+edge. Animated busy cursors currently use a static colored frame while filtered.
+Application-specific cursors and the secure desktop are outside this standard
+cursor replacement mechanism. `SystemCursorsFiltered` reports replacement of
+the standard table, not proof that every application cursor is filtered.
 
 With different monitor profiles or an excluded monitor, the global API cannot
 represent those values. The prototype uses one opaque, click-through,
@@ -84,7 +113,15 @@ are explicitly distinguished from physical suspension.
 
 `--preview` instantiates the real control window with synthetic monitor profiles,
 verifies 4000 K / 2700 K edits, exact-red selection, monitor isolation and schedule
-controls, and renders only that application's UI. It never starts the renderer.
+controls and the cursor option, and renders only that application's UI. It never
+starts the renderer. `--probe-cursors=<directory>` reads only cursor bitmaps,
+tests native identity/warm/exact-red copies of all 13 standard shapes, and checks
+their alpha, dimensions and hotspots. It reads the mouse-trail preference without
+changing it and never replaces system cursors or starts another magnifier.
+
+After the global taskbar correction, the user reported that wake behavior appeared
+to be working. This is provisional feedback; repeated physical suspension,
+hibernation and external-monitor tests remain open.
 
 Physical gates before treating this as a reliable replacement:
 
@@ -115,7 +152,8 @@ dotnet Candlelight.Next/bin/Release/net10.0-windows/Candlelight.Next.dll --probe
 `--import=<legacy Settings.json>` imports monitor values on the first start only.
 `--settings=<path>` isolates a settings store. `--hidden` starts in the tray.
 The current-user/session-only control pipe supports `--command=status`, `show`,
-`hide`, `set`, `pause` and `stop`; `--response=<file>` saves a diagnostic response.
+`hide`, `set`, `pause`, `cursor-on`, `cursor-off` and `stop`; `--response=<file>`
+saves a diagnostic response.
 `set` accepts `--monitor=<id>`, `--temperature=2700`, `--brightness=100` and optional
 `--red`. These switches control this application only.
 The diagnostic commands `probe-suspend` and `probe-resume` exercise the same
@@ -147,5 +185,7 @@ Sources:
 - [Microsoft Magnification API overview](https://learn.microsoft.com/en-us/windows/win32/winauto/magapi/magapi-intro)
 - [Microsoft MagSetColorEffect](https://learn.microsoft.com/en-us/windows/win32/api/magnification/nf-magnification-magsetcoloreffect)
 - [Microsoft MagSetFullscreenColorEffect](https://learn.microsoft.com/en-us/windows/win32/api/magnification/nf-magnification-magsetfullscreencoloreffect)
+- [Microsoft SetSystemCursor](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setsystemcursor)
+- [Microsoft CreateIconIndirect](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-createiconindirect)
 - [Microsoft windowed magnifier sample](https://github.com/microsoft/Windows-classic-samples/blob/main/Samples/Magnification/cpp/Windowed/MagnifierSample.cpp)
 - [Microsoft gamma-ramp limitations](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-setdevicegammaramp)
