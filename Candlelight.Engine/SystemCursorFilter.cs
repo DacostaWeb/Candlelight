@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 
 namespace Candlelight.Engine;
@@ -86,7 +87,19 @@ internal sealed class SystemCursorFilter : IDisposable
                         throw;
                     }
                 }
-            foreach (var (id, original) in _originals)
+            // Apply the visible standard shape first, before preparing the other
+            // twelve shapes and their recovery records. Native pointer movement
+            // remains independent of both this work and the desktop renderer.
+            var info = new CursorNative.CursorInfo
+            {
+                Size = Marshal.SizeOf<CursorNative.CursorInfo>(),
+            };
+            var current = CursorNative.GetCursorInfo(ref info) ? info.Cursor : 0;
+            var visibleId =
+                current == 0
+                    ? 0
+                    : Ids.FirstOrDefault(id => CursorNative.LoadCursor(0, (nint)id) == current);
+            foreach (var (id, original) in _originals.OrderBy(p => p.Key == visibleId ? 0 : 1))
             {
                 var cursor = original.Image.Create(gain);
                 if (!CursorNative.SetSystemCursor(cursor, id))

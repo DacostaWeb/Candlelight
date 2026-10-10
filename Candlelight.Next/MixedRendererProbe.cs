@@ -2,6 +2,7 @@ using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using Candlelight.Engine;
+using Microsoft.Win32.SafeHandles;
 using ColorMode = Candlelight.Engine.ColorMode;
 
 namespace Candlelight.Next;
@@ -216,6 +217,7 @@ internal sealed class MixedRendererProbe : Form
                 id => id,
                 id => CursorImage.Read(CursorNative.LoadCursor(0, (nint)id))
             );
+            using var originalArrow = new OriginalCursorCopy(32512);
             using (var cursors = new SystemCursorFilter(null))
             {
                 // SetSystemCursor resamples an installed bitmap on this DPI setup.
@@ -332,6 +334,56 @@ internal sealed class MixedRendererProbe : Form
                         }
                     );
                 }
+                var installed = SystemCursorFilter.Ids.ToDictionary(
+                    id => id,
+                    id => CursorImage.Read(CursorNative.LoadCursor(0, (nint)id)).Fingerprint
+                );
+                var leasePath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "Candlelight.Next",
+                    "SystemCursorLease.json"
+                );
+                var leaseBefore = File.ReadAllBytes(leasePath);
+                var refreshTimer = System.Diagnostics.Stopwatch.StartNew();
+                for (var i = 0; i < 20; i++)
+                    cursors.Refresh();
+                refreshTimer.Stop();
+                if (!File.ReadAllBytes(leasePath).SequenceEqual(leaseBefore))
+                    throw new InvalidOperationException(
+                        "Unchanged cursor refresh rewrote its lease."
+                    );
+                _results.Add(
+                    new
+                    {
+                        test = "native-cursor-read-only-refresh",
+                        passed = true,
+                        meanMilliseconds = refreshTimer.Elapsed.TotalMilliseconds / 20,
+                    }
+                );
+                // Simulate a standard arrow reset while a gain is already active.
+                // Use the original native copy, preserving its exact DPI geometry.
+                if (!CursorNative.SetSystemCursor(originalArrow.DangerousGetHandle(), 32512))
+                    throw new InvalidOperationException(
+                        "Could not exercise standard cursor reset."
+                    );
+                originalArrow.SetHandleAsInvalid(); // SetSystemCursor consumed the handle.
+                if (
+                    CursorImage.Read(CursorNative.LoadCursor(0, 32512)).Fingerprint
+                    == installed[32512]
+                )
+                    throw new InvalidOperationException(
+                        "Cursor reset probe did not change the arrow."
+                    );
+                cursors.Refresh();
+                foreach (var (id, fingerprint) in installed)
+                    if (
+                        CursorImage.Read(CursorNative.LoadCursor(0, (nint)id)).Fingerprint
+                        != fingerprint
+                    )
+                        throw new InvalidOperationException(
+                            $"Cursor reset was not repaired for {id}."
+                        );
+                _results.Add(new { test = "native-cursor-reset-recovery", passed = true });
                 cursors.Restore();
             }
             foreach (var (id, original) in originals)
@@ -423,6 +475,21 @@ internal sealed class MixedRendererProbe : Form
             throw new InvalidOperationException(
                 $"Owned test patches failed {name}; see results.json."
             );
+    }
+
+    private sealed class OriginalCursorCopy : SafeHandleZeroOrMinusOneIsInvalid
+    {
+        public OriginalCursorCopy(uint id)
+            : base(true)
+        {
+            SetHandle(CursorNative.CopyIcon(CursorNative.LoadCursor(0, (nint)id)));
+            if (IsInvalid)
+                throw new InvalidOperationException(
+                    "Could not copy original cursor for the probe."
+                );
+        }
+
+        protected override bool ReleaseHandle() => CursorNative.DestroyCursor(handle);
     }
 
     private static Color[] ReadPatches(DisplayDescriptor display)

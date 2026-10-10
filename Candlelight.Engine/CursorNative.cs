@@ -5,6 +5,19 @@ namespace Candlelight.Engine;
 internal static class CursorNative
 {
     [StructLayout(LayoutKind.Sequential)]
+    internal struct CursorInfo
+    {
+        public int Size;
+        public uint Flags;
+        public nint Cursor;
+        public Native.Point Position;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool GetCursorInfo(ref CursorInfo info);
+
+    [StructLayout(LayoutKind.Sequential)]
     internal struct IconInfo
     {
         public int IsIcon;

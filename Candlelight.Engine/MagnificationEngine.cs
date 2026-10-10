@@ -55,6 +55,7 @@ public sealed class MagnificationEngine : IDisposable
         _displayOff;
     private long _resumeAt,
         _lastStatus,
+        _lastCursorRefresh,
         _lastWake;
     private volatile bool _disposed;
     private bool _initialized;
@@ -478,6 +479,22 @@ public sealed class MagnificationEngine : IDisposable
                 SetDesktopEffect(_desktopGain, Black);
         }
         UpdateSystemCursors();
+        // DPI/display transitions can replace a standard cursor after the gain
+        // was applied. Detect that independently of the slower status interval.
+        // An unchanged table is read-only; no cursor replacement or lease write.
+        if (Environment.TickCount64 - _lastCursorRefresh >= 100)
+        {
+            try
+            {
+                _systemCursors?.Refresh();
+            }
+            catch (Exception error)
+            {
+                _cursorError = "Não foi possível atualizar o ponteiro.";
+                _log?.Invoke(error.ToString());
+            }
+            _lastCursorRefresh = Environment.TickCount64;
+        }
         var black = Black;
         foreach (var presenter in _presenters.Values)
         {
@@ -490,15 +507,6 @@ public sealed class MagnificationEngine : IDisposable
         {
             foreach (var presenter in _presenters.Values)
                 presenter.VerifyAndRaise();
-            try
-            {
-                _systemCursors?.Refresh();
-            }
-            catch (Exception error)
-            {
-                _cursorError = "Não foi possível atualizar o ponteiro.";
-                _log?.Invoke(error.ToString());
-            }
             _lastStatus = Environment.TickCount64;
             PublishStatus();
         }

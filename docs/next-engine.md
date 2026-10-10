@@ -81,7 +81,11 @@ launch an elevated renderer. Profiles remain in the existing user settings file.
 manifest setting. The normal build warns when a selected profile needs a local
 surface without this access. An enabled token and a successful native color
 matrix readback still do not certify OLED taskbar, Start or drag-preview pixels:
-that build requires a physical interaction test after installation.
+that build requires a physical interaction test after installation. The user
+confirmed filtered taskbar/Start interaction on the HDMI OLED after the signed
+installation. Its outline-only drag rectangle still remained white, so the user
+selected Windows' full-window dragging option instead; this preference affects
+both monitors. Fast pointer crossings can still expose an unfiltered cursor.
 
 ### Native cursor filtering without trails (0.2.2–0.2.5)
 
@@ -124,6 +128,17 @@ edge. Animated busy cursors currently use a static colored frame while filtered.
 Application-specific cursors and the secure desktop are outside this standard
 cursor replacement mechanism. `SystemCursorsFiltered` reports replacement of
 the standard table, not proof that every application cursor is filtered.
+
+The 0.2.5 cursor hotfix prioritizes the visible standard shape during a gain
+switch, identified with `GetCursorInfo`. Installed table fingerprints are checked
+on a separate 100 ms minimum interval, instead of waiting for the one-second
+status update. This reduces recovery delay if Windows replaces a standard shape
+after a display/DPI transition. Unchanged checks only read cursor bitmaps and do
+not replace shapes or rewrite the recovery lease. The native probe exercises a
+reset of the arrow while a gain remains active, verifies recovery of all shapes
+and exact original restoration, and times repeated read-only checks. This is a
+targeted mitigation; it does not establish the cause of every visible white
+pointer or filter application-specific cursor resources.
 
 Local corrections use opaque, click-through, non-activating Magnification
 controls. If the desktop API is unavailable, the prototype uses the original
