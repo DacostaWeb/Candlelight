@@ -357,7 +357,7 @@ internal sealed class ControlWindow : Form
                 state is null ? "Monitor desligado; perfil guardado."
                 : !state.Enabled ? "Filtro em pausa neste monitor."
                 : state.Black ? "A retomar o monitor…"
-                : snapshot.Renderer == "Desktop" && !snapshot.DesktopEffectVerified
+                : snapshot.DesktopGain is not null && !snapshot.DesktopEffectVerified
                     ? "Não foi possível confirmar o filtro de cor."
                 : snapshot.Renderer == "PerMonitorWindows"
                     ? "Perfis separados: a barra de tarefas pode ficar sem filtro."

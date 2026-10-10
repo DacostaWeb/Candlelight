@@ -32,35 +32,54 @@ theme settings and the original updater.
 ## Renderer
 
 `Candlelight.Engine` owns a dedicated STA thread and native message loop.
-When all connected monitors have the same enabled profile (including the current
-single internal panel), `MagSetFullscreenColorEffect` applies the 5x5 color matrix
-to the entire desktop. This includes the Windows taskbar without an overlay above
-it. The real user confirmed taskbar coverage at 2700 K / 100% on this machine.
+`MagSetFullscreenColorEffect` applies a shared 5x5 color matrix to the entire
+desktop. With equal profiles, no local surfaces are needed. Version 0.2.4 also
+uses the componentwise maximum of the requested channel gains as a shared filter
+for mixed profiles. Each monitor's remaining attenuation is applied by a local
+surface only where needed. Disabled or unknown displays contribute identity,
+so the shared matrix cannot remove a channel they need. A zero shared channel
+uses an identity local factor instead of dividing by zero.
+
+For the tested internal 2700 K / 100% and OLED pure-red / 15% combination, the
+shared gain equals the internal profile. Its entire desktop, including the main
+taskbar, receives that color without a local surface. Only the OLED needs a
+local correction (red 0.15, green/blue zero). The user previously confirmed
+global taskbar coverage on the internal panel and local coverage on the OLED;
+physical confirmation of this combined path remains required.
 The preceding desktop effect is saved and
 restored when the filter is paused or the app exits, provided another application
 has not replaced it. Resume uses a black desktop effect for 300 ms before the
 desired color. Matrix readback is exposed as `DesktopEffectVerified`; it is not
 a measurement of panel light or proof of physical wake behavior.
 
-### Cursor filtering without trails (0.2.2)
+### Native cursor filtering without trails (0.2.2–0.2.4)
 
 On this driver, the desktop color effect leaves the hardware cursor white.
 A temporary minimum mouse-trails experiment made it warm, including over the
 taskbar, but the user rejected the visible trail. Trails were restored to zero;
 the application never changes that Windows setting.
 
-The desktop path now makes temporary colored copies of 13 standard Windows
+Both renderer paths make temporary colored copies of 13 standard Windows
 cursor shapes using `GetIconInfo`, `CreateIconIndirect` and `SetSystemCursor`.
 It preserves dimensions, click hotspots, alpha and black outlines, and applies
 the current temperature/brightness or exact-red gains to their pixels. Copies
 come from the original images, so profile changes never compound their tint.
+The pointer's current physical monitor selects its final gain; the global/local
+desktop factors are not applied twice to its pixels. Monitor membership is
+checked on the renderer timer using cached display bounds. An unchanged gain
+does not replace cursors or write recovery state. Both magnifier paths keep the
+system pointer visible and omit `MS_SHOWMAGNIFIEDCURSOR`, so pointer motion is
+independent of captured desktop frames. No mouse-speed or trails setting changes.
 The normal preset retains the original shapes. No cursor scheme or registry
 setting is written. The original native handles are copied back on pause, exit
-or switching to the per-monitor renderer. A changed Windows cursor theme is
+or disabling cursor filtering. A changed Windows cursor theme is
 rebased without restoring over the user's new shapes.
 
 A local `SystemCursorLease.json` records ownership and original pixels for
-recovery on the next launch after an interrupted exit. Only still-owned shapes
+recovery on the next launch after an interrupted exit. Installed fingerprints
+are read back after each replacement because Windows can resample installed
+cursor bitmaps for DPI. The lease records each completed replacement; no state
+is written while the pointer stays on a monitor with an unchanged gain. Only still-owned shapes
 are recovered, including when cursor filtering is disabled. Normal exit restores
 native cursor copies; recovery after a crash can restore only static pixels.
 Monochrome background-inverting strokes become colored strokes with a black
@@ -69,15 +88,18 @@ Application-specific cursors and the secure desktop are outside this standard
 cursor replacement mechanism. `SystemCursorsFiltered` reports replacement of
 the standard table, not proof that every application cursor is filtered.
 
-With different monitor profiles or an excluded monitor, the global API cannot
-represent those values. The prototype uses one opaque, click-through,
-non-activating Magnification control per enabled monitor instead. Magnification
+Local corrections use opaque, click-through, non-activating Magnification
+controls. If the desktop API is unavailable, the prototype uses the original
+per-monitor gains in these controls instead. Magnification
 is 1x. Each source rectangle is its monitor's physical bounds; all renderer
-hosts are excluded from capture to avoid feedback. **This path has an unresolved
+hosts are excluded from capture to avoid feedback. **Local surfaces retain a
 taskbar coverage limitation.** Ordinary topmost hosts failed to filter the
 auto-hidden Windows taskbar on this machine, even when raised on every refresh.
-The app shows that limitation while separate profiles are active. Independent
-profiles must not be considered a complete desktop filtering solution yet.
+The global portion reaches those shell surfaces. The full requested color on
+every monitor's shell is guaranteed by the plan only when its gain matches the
+shared gain; other shell coverage needs physical testing. The app shows the
+existing warning when the global API is unavailable. Different settings are
+applied as a batch, avoiding an intermediate plan between monitors.
 
 In that per-monitor path, the same opaque hosts stay in place during suspension.
 Suspend, display-off and
@@ -92,8 +114,7 @@ as that sample does, rather than only during the once-per-second diagnostic.
 A black color matrix passed readback but left a cached black
 image in the simulated resume test on this driver; black protection therefore
 uses the host background rather than a zero matrix.
-The unfiltered hardware cursor is hidden only over a filtered monitor; the
-magnifier renders its cursor instead. Exit restores ordinary cursor visibility.
+The native pointer remains visible; it is never captured into local frames.
 
 This is an architectural change, not proof that the compositor/driver never
 presents a normal frame. App windows cannot cover the secure desktop, boot,
@@ -112,6 +133,13 @@ panel light, certify shell coverage or establish real sleep/resume behavior.
 Fullscreen desktop effects are a later compositor stage; those windowed pixel
 samples must not be reported as proof of the global effect. Simulated notifications
 are explicitly distinguished from physical suspension.
+
+`--probe-mixed=<directory>` uses dark source patches on two real monitors. It
+checks warm internal / red OLED profiles, a single local surface, lower-brightness
+matrix composition, pause isolation, simulated black/resume and desktop readback.
+It also installs native identity/warm/red cursor copies, verifies their color,
+alpha and hotspots after Windows' DPI resampling, and restores the originals.
+Only the four owned patch centers are sampled; desktop images are never saved.
 
 `--preview` instantiates the real control window with synthetic monitor profiles,
 verifies 4000 K / 2700 K edits, exact-red selection, monitor isolation and schedule

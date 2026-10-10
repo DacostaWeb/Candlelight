@@ -123,6 +123,8 @@ internal sealed class SystemCursorFilter : IDisposable
     public void Restore()
     {
         EnsureRecovered();
+        if (_gain is null && _owned.Count == 0 && _originals.Count == 0)
+            return;
         List<Exception> failures = [];
         foreach (var (id, fingerprint) in _owned.ToArray())
         {

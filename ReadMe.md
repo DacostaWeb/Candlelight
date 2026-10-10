@@ -2,13 +2,15 @@
 
 <p><img src="favicon.png" width="96" height="96" alt="Candlelight candle icon" /></p>
 
-**0.2.3 hardware-test prototype:** a smaller, independent application now uses
+**0.2.4 hardware-test prototype:** a smaller, independent application now uses
 the documented Windows Magnification API instead of gamma/Night Light handovers.
 With one enabled monitor, the desktop filter includes the Windows taskbar;
 coverage at 2700 K / 100% was physically confirmed on the internal panel.
 It includes saved monitor profiles, explicit red-only mode, presets and daily
-schedules. Different per-monitor values use a windowed renderer whose taskbar
-coverage remains unresolved. See [the renderer and test gates](docs/next-engine.md).
+schedules. Mixed profiles now combine a shared desktop filter with local monitor
+corrections: the internal 2700 K / 100% profile stays global while the OLED uses
+red / 15%. Both paths retain the native pointer, with its color selected by monitor.
+Shell coverage for other combinations still needs testing. See [the renderer and test gates](docs/next-engine.md).
 Run `Candlelight.Next.exe`; build/package with `scripts/publish-next.ps1`.
 The 0.1.4 physical wake test failed, so it is retained as a rollback baseline,
 not a verified flash-free solution. Real wake testing of 0.2 is still required.

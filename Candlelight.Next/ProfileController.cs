@@ -59,14 +59,21 @@ internal sealed class ProfileController : IDisposable
                 await Engine.SetCursorFilteringAsync(settings.FilterCursor);
                 _lastCursorFiltering = settings.FilterCursor;
             }
-            foreach (var monitor in settings.Monitors)
-            {
-                var target = (monitor.Evaluate(now), monitor.Enabled);
-                if (!_last.TryGetValue(monitor.Id, out var last) || last != target)
+            var changes = settings
+                .Monitors.Select(monitor =>
                 {
-                    await Engine.ApplyAsync(monitor.Id, target.Item1, target.Enabled);
-                    _last[monitor.Id] = target;
-                }
+                    var target = (monitor.Evaluate(now), monitor.Enabled);
+                    return (DisplayId: monitor.Id, Profile: target.Item1, target.Enabled);
+                })
+                .Where(p =>
+                    !_last.TryGetValue(p.DisplayId, out var last) || last != (p.Profile, p.Enabled)
+                )
+                .ToArray();
+            if (changes.Length > 0)
+            {
+                await Engine.ApplyProfilesAsync(changes);
+                foreach (var p in changes)
+                    _last[p.DisplayId] = (p.Profile, p.Enabled);
             }
             Error = null;
         }

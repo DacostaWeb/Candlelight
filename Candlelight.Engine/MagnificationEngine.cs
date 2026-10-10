@@ -21,7 +21,10 @@ public sealed record EngineSnapshot(
     string Renderer,
     bool DesktopEffectVerified,
     bool SystemCursorsFiltered,
-    string? CursorError
+    string? CursorError,
+    ChannelGain? DesktopGain,
+    int LocalSurfaces,
+    string? CursorMonitor
 );
 
 /// <summary>
@@ -50,14 +53,15 @@ public sealed class MagnificationEngine : IDisposable
     private long _resumeAt,
         _lastStatus,
         _lastWake;
-    private bool _cursorHidden;
     private volatile bool _disposed;
     private bool _initialized;
     private readonly bool _allowDesktopEffect;
     private bool _desktopUnavailable;
     private Native.ColorEffect _desktopPrevious,
         _desktopEffect;
-    private ColorProfile? _desktopProfile;
+    private ChannelGain? _desktopGain;
+    private DesktopRenderPlan _plan = new(null, []);
+    private string? _cursorMonitor;
     private bool _desktopBlack;
     private long _desktopUpdates;
     private SystemCursorFilter? _systemCursors;
@@ -79,12 +83,20 @@ public sealed class MagnificationEngine : IDisposable
         _thread.Start();
     }
 
-    public async Task ApplyAsync(string displayId, ColorProfile profile, bool enabled = true)
+    public async Task ApplyAsync(string displayId, ColorProfile profile, bool enabled = true) =>
+        await ApplyProfilesAsync([(displayId, profile, enabled)]);
+
+    public async Task ApplyProfilesAsync(
+        IEnumerable<(string DisplayId, ColorProfile Profile, bool Enabled)> profiles
+    )
     {
-        profile = profile.Validate();
+        var validated = profiles
+            .Select(p => (p.DisplayId, Profile: p.Profile.Validate(), p.Enabled))
+            .ToArray();
         await DispatchAsync(() =>
         {
-            _profiles[displayId] = (profile, enabled);
+            foreach (var p in validated)
+                _profiles[p.DisplayId] = (p.Profile, p.Enabled);
             SynchronizeDisplays();
             PublishStatus();
         });
@@ -103,10 +115,6 @@ public sealed class MagnificationEngine : IDisposable
         DispatchAsync(() =>
         {
             _filterCursors = enabled;
-            foreach (var presenter in _presenters.Values)
-                presenter.Dispose();
-            _presenters.Clear();
-            SynchronizeDisplays();
             UpdateSystemCursors();
             PublishStatus();
         });
@@ -216,8 +224,6 @@ public sealed class MagnificationEngine : IDisposable
             RestoreDesktopEffect();
             _systemCursors?.Dispose();
             _systemCursors = null;
-            if (_cursorHidden)
-                Native.MagShowSystemCursor(true);
             foreach (var presenter in _presenters.Values)
                 presenter.Dispose();
             _presenters.Clear();
@@ -327,9 +333,10 @@ public sealed class MagnificationEngine : IDisposable
         _resumeAt = 0;
         Native.SetTimer(_window, 1, 1000, 0);
         foreach (var presenter in _presenters.Values)
-            presenter.SetProfile(presenter.Profile, true);
-        if (_desktopProfile is not null)
-            SetDesktopEffect(_desktopProfile, true);
+            presenter.SetProfile(presenter.Profile, presenter.Gain, true);
+        if (_desktopGain is not null)
+            SetDesktopEffect(_desktopGain, true);
+        UpdateSystemCursors();
         Native.DwmFlush();
         _log?.Invoke(reason + "; existing renderers kept black.");
         PublishStatus();
@@ -350,26 +357,21 @@ public sealed class MagnificationEngine : IDisposable
     private void SynchronizeDisplays()
     {
         var displays = DisplayCatalog.GetDisplays();
-        // The desktop effect includes shell surfaces that can appear above a
-        // normal topmost window. It is global, so use it only when every connected
-        // display has the same enabled profile. Never silently color an excluded
-        // monitor or substitute one monitor's settings for another's.
-        var desktopProfiles = displays.Select(d => _profiles.GetValueOrDefault(d.Id)).ToArray();
-        if (
-            _allowDesktopEffect
-            && !_desktopUnavailable
-            && desktopProfiles.Length > 0
-            && desktopProfiles.All(p => p.Enabled && p.Profile == desktopProfiles[0].Profile)
-        )
+        _plan = DesktopRenderPlan.Create(
+            displays,
+            _profiles,
+            _allowDesktopEffect && !_desktopUnavailable
+        );
+        if (_plan.DesktopGain is { } shared)
         {
             try
             {
-                if (_desktopProfile is null)
+                if (_desktopGain is null)
                 {
                     if (!Native.MagGetFullscreenColorEffect(out _desktopPrevious))
                         throw Error("Read previous desktop filter");
                 }
-                SetDesktopEffect(desktopProfiles[0].Profile, Black);
+                SetDesktopEffect(shared, Black);
             }
             catch (Win32Exception error)
             {
@@ -378,32 +380,23 @@ public sealed class MagnificationEngine : IDisposable
                 // limitation instead of repeating an unavailable API forever.
                 _desktopUnavailable = true;
                 _log?.Invoke("Desktop filter unavailable; using local surfaces: " + error);
-            }
-            if (!_desktopUnavailable)
-            {
-                foreach (var presenter in _presenters.Values)
-                    presenter.Dispose();
-                _presenters.Clear();
-                if (_cursorHidden && Native.MagShowSystemCursor(true))
-                    _cursorHidden = false;
-                PublishStatus();
-                return;
+                RestoreDesktopEffect();
+                _plan = DesktopRenderPlan.Create(displays, _profiles, false);
             }
         }
-        var wanted = displays
-            .Where(d => _profiles.TryGetValue(d.Id, out var p) && p.Enabled)
-            .ToArray();
-        foreach (var display in wanted)
+        var wanted = _plan.Monitors.Where(m => m.NeedsSurface).ToArray();
+        foreach (var monitor in wanted)
         {
+            var display = monitor.Display;
             if (!_presenters.TryGetValue(display.Id, out var presenter))
             {
-                presenter = new Presenter(display, _className, _filterCursors);
+                presenter = new Presenter(display, _className);
                 _presenters.Add(display.Id, presenter);
             }
             presenter.SetBounds(display);
-            presenter.SetProfile(_profiles[display.Id].Profile, Black);
+            presenter.SetProfile(monitor.Profile, monitor.LocalGain, Black);
         }
-        foreach (var id in _presenters.Keys.Except(wanted.Select(d => d.Id)).ToArray())
+        foreach (var id in _presenters.Keys.Except(wanted.Select(m => m.Display.Id)).ToArray())
         {
             _presenters[id].Dispose();
             _presenters.Remove(id);
@@ -416,18 +409,18 @@ public sealed class MagnificationEngine : IDisposable
             presenter.Render();
             presenter.Show();
         }
-        // Prepare the local surfaces before relinquishing the global effect.
-        RestoreDesktopEffect();
+        if (_plan.DesktopGain is null)
+            RestoreDesktopEffect();
+        UpdateSystemCursors();
+        PublishStatus();
     }
 
-    private void SetDesktopEffect(ColorProfile profile, bool black)
+    private void SetDesktopEffect(ChannelGain gain, bool black)
     {
-        var effect = Native.ColorEffect.FromGain(
-            black ? new(0, 0, 0) : ChannelGain.FromProfile(profile)
-        );
+        var effect = Native.ColorEffect.FromGain(black ? new(0, 0, 0) : gain);
         if (!Native.MagSetFullscreenColorEffect(ref effect))
             throw Error("Set desktop color filter");
-        _desktopProfile = profile;
+        _desktopGain = gain;
         _desktopBlack = black;
         _desktopEffect = effect;
         _desktopUpdates++;
@@ -438,16 +431,12 @@ public sealed class MagnificationEngine : IDisposable
     {
         try
         {
-            var gain = _desktopProfile is not null
-                ? ChannelGain.FromProfile(_desktopProfile)
-                : new(1, 1, 1);
-            if (
-                _filterCursors
-                && _desktopProfile is not null
-                && !_locked
-                && (_desktopBlack || gain != new ChannelGain(1, 1, 1))
-            )
-                _systemCursors?.Apply(_desktopBlack ? new(0, 0, 0) : gain);
+            var monitor = Native.GetCursorPos(out var cursor) ? _plan.At(cursor.X, cursor.Y) : null;
+            _cursorMonitor = monitor?.Display.Id;
+            var gain = monitor?.Gain ?? new(1, 1, 1);
+            var black = Black && monitor?.Enabled == true;
+            if (_filterCursors && !_locked && (black || gain != new ChannelGain(1, 1, 1)))
+                _systemCursors?.Apply(black ? new(0, 0, 0) : gain);
             else
                 _systemCursors?.Restore();
             _cursorError = null;
@@ -461,7 +450,7 @@ public sealed class MagnificationEngine : IDisposable
 
     private void RestoreDesktopEffect()
     {
-        if (_desktopProfile is null)
+        if (_desktopGain is null)
             return;
         // Leave a newer effect from another application alone.
         if (
@@ -469,55 +458,26 @@ public sealed class MagnificationEngine : IDisposable
             && current.Values.SequenceEqual(_desktopEffect.Values)
         )
             Native.MagSetFullscreenColorEffect(ref _desktopPrevious);
-        _desktopProfile = null;
-        UpdateSystemCursors();
+        _desktopGain = null;
     }
 
     private void Tick()
     {
-        if (_desktopProfile is not null)
+        if (_desktopGain is not null)
         {
             if (
                 _desktopBlack != Black
                 || !Native.MagGetFullscreenColorEffect(out var effect)
                 || !effect.Values.SequenceEqual(_desktopEffect.Values)
             )
-                SetDesktopEffect(_desktopProfile, Black);
-            if (Environment.TickCount64 - _lastStatus >= 1000)
-            {
-                _lastStatus = Environment.TickCount64;
-                try
-                {
-                    _systemCursors?.Refresh();
-                }
-                catch (Exception error)
-                {
-                    _cursorError = "Não foi possível atualizar o ponteiro.";
-                    _log?.Invoke(error.ToString());
-                }
-                PublishStatus();
-            }
-            return;
+                SetDesktopEffect(_desktopGain, Black);
         }
-        if (Native.GetCursorPos(out var cursor))
-        {
-            var hide =
-                _filterCursors
-                && !_locked
-                && _presenters.Values.Any(p =>
-                    cursor.X >= p.Display.Left
-                    && cursor.X < p.Display.Left + p.Display.Width
-                    && cursor.Y >= p.Display.Top
-                    && cursor.Y < p.Display.Top + p.Display.Height
-                );
-            if (hide != _cursorHidden && Native.MagShowSystemCursor(!hide))
-                _cursorHidden = hide;
-        }
+        UpdateSystemCursors();
         var black = Black;
         foreach (var presenter in _presenters.Values)
         {
             if (presenter.Black != black)
-                presenter.SetProfile(presenter.Profile, black);
+                presenter.SetProfile(presenter.Profile, presenter.Gain, black);
             if (!_sleeping && !_displayOff && !_locked)
                 presenter.Render();
         }
@@ -525,6 +485,15 @@ public sealed class MagnificationEngine : IDisposable
         {
             foreach (var presenter in _presenters.Values)
                 presenter.VerifyAndRaise();
+            try
+            {
+                _systemCursors?.Refresh();
+            }
+            catch (Exception error)
+            {
+                _cursorError = "Não foi possível atualizar o ponteiro.";
+                _log?.Invoke(error.ToString());
+            }
             _lastStatus = Environment.TickCount64;
             PublishStatus();
         }
@@ -532,39 +501,30 @@ public sealed class MagnificationEngine : IDisposable
 
     private EngineSnapshot CreateSnapshot() =>
         new(
-            DisplayCatalog
-                .GetDisplays()
-                .Select(d =>
-                    _desktopProfile is not null
-                        ? new EngineMonitorState(
-                            d,
-                            _desktopProfile,
-                            true,
-                            _desktopBlack,
-                            _desktopUpdates,
-                            null
-                        )
-                    : _presenters.TryGetValue(d.Id, out var p)
-                        ? new EngineMonitorState(d, p.Profile, true, p.Black, p.Frames, p.Error)
-                    : new EngineMonitorState(
-                        d,
-                        _profiles.GetValueOrDefault(d.Id).Profile ?? ColorProfile.Normal,
-                        false,
-                        false,
-                        0,
-                        null
-                    )
-                )
+            _plan
+                .Monitors.Select(m => new EngineMonitorState(
+                    m.Display,
+                    m.Profile,
+                    m.Enabled,
+                    m.Enabled && Black,
+                    _presenters.TryGetValue(m.Display.Id, out var p) ? p.Frames : _desktopUpdates,
+                    p?.Error
+                ))
                 .ToArray(),
             _sleeping,
             _locked,
             DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            _desktopProfile is not null ? "Desktop" : "PerMonitorWindows",
-            _desktopProfile is not null
+            _desktopGain is not null
+                ? (_presenters.Count == 0 ? "Desktop" : "DesktopWithLocalCorrections")
+                : "PerMonitorWindows",
+            _desktopGain is not null
                 && Native.MagGetFullscreenColorEffect(out var current)
                 && current.Values.SequenceEqual(_desktopEffect.Values),
             _systemCursors?.Active == true,
-            _cursorError
+            _cursorError,
+            _desktopGain,
+            _presenters.Count,
+            _cursorMonitor
         );
 
     private void PublishStatus()
@@ -601,13 +561,14 @@ public sealed class MagnificationEngine : IDisposable
         public nint Host { get; }
         private readonly nint _magnifier;
         public ColorProfile Profile { get; private set; } = ColorProfile.Normal;
+        public ChannelGain Gain { get; private set; } = new(1, 1, 1);
         public bool Black { get; private set; }
         public long Frames { get; private set; }
         public string? Error { get; private set; }
         private Native.ColorEffect _effect;
         private bool _shown;
 
-        public Presenter(DisplayDescriptor display, string hostClass, bool filterCursor)
+        public Presenter(DisplayDescriptor display, string hostClass)
         {
             Display = display;
             Host = Native.CreateWindowEx(
@@ -634,7 +595,7 @@ public sealed class MagnificationEngine : IDisposable
                     0,
                     "Magnifier",
                     null,
-                    filterCursor ? 0x50000001u : 0x50000000u,
+                    0x50000000u, // Keep the native hardware pointer; never capture it into frames.
                     0,
                     0,
                     display.Width,
@@ -674,11 +635,12 @@ public sealed class MagnificationEngine : IDisposable
             Native.SetWindowPos(_magnifier, 0, 0, 0, display.Width, display.Height, 0x14);
         }
 
-        public void SetProfile(ColorProfile profile, bool black)
+        public void SetProfile(ColorProfile profile, ChannelGain gain, bool black)
         {
             Profile = profile;
+            Gain = gain;
             Black = black;
-            _effect = Native.ColorEffect.FromGain(ChannelGain.FromProfile(profile));
+            _effect = Native.ColorEffect.FromGain(gain);
             if (!Native.MagSetColorEffect(_magnifier, ref _effect))
             {
                 Error = "Não foi possível aplicar o filtro de cor.";

@@ -17,6 +17,12 @@ internal static class Program
         }
         string? Option(string name) =>
             Array.Find(args, a => a.StartsWith(name + "="))?[(name.Length + 1)..];
+        if (Option("--probe-mixed") is { } mixedProbe)
+        {
+            using var form = new MixedRendererProbe(mixedProbe);
+            Application.Run(form);
+            return form.ExitCode;
+        }
         if (Option("--probe-cursors") is { } cursorProbe)
             return CursorProbe.Run(cursorProbe);
         if (Option("--command") is { } command)
