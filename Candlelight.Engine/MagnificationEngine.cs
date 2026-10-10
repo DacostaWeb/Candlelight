@@ -28,6 +28,7 @@ public sealed record EngineSnapshot(
 )
 {
     public bool UiAccessEnabled { get; } = DesktopAccess.UiAccessEnabled;
+    public bool InputDesktopInactive { get; init; }
 }
 
 /// <summary>
@@ -71,16 +72,30 @@ public sealed class MagnificationEngine : IDisposable
     private SystemCursorFilter? _systemCursors;
     private bool _filterCursors = true;
     private string? _cursorError;
+    private readonly bool _manageSystemCursors;
+    private readonly bool _protectSessionLock;
+    private readonly bool _trackInputDesktop;
+    private string? _threadDesktop;
+    private bool _desktopInactive;
 
     public event Action<EngineSnapshot>? StatusChanged;
     public Task Ready => _started.Task;
 
-    public MagnificationEngine(Action<string>? log = null, bool allowDesktopEffect = true)
+    public MagnificationEngine(
+        Action<string>? log = null,
+        bool allowDesktopEffect = true,
+        bool manageSystemCursors = true,
+        bool protectSessionLock = true,
+        bool trackInputDesktop = false
+    )
     {
         if (!OperatingSystem.IsWindows() || !Environment.Is64BitProcess)
             throw new PlatformNotSupportedException("The color renderer requires 64-bit Windows.");
         _log = log;
         _allowDesktopEffect = allowDesktopEffect;
+        _manageSystemCursors = manageSystemCursors;
+        _protectSessionLock = protectSessionLock;
+        _trackInputDesktop = trackInputDesktop;
         _procedure = WindowProcedure;
         _thread = new Thread(Run) { IsBackground = true, Name = "Candlelight color renderer" };
         _thread.SetApartmentState(ApartmentState.STA);
@@ -165,7 +180,9 @@ public sealed class MagnificationEngine : IDisposable
             if (!Native.MagInitialize())
                 throw Error("MagInitialize");
             _initialized = true;
-            _systemCursors = new(_log);
+            _threadDesktop = InputDesktop.ThreadName;
+            if (_manageSystemCursors)
+                _systemCursors = new(_log);
             var windowClass = new Native.WindowClass
             {
                 Size = (uint)Marshal.SizeOf<Native.WindowClass>(),
@@ -267,7 +284,7 @@ public sealed class MagnificationEngine : IDisposable
             }
             if (message == 0x007E && window == _window) // WM_DISPLAYCHANGE
                 SynchronizeDisplays();
-            if (message == 0x02B1 && window == _window) // WM_WTSSESSION_CHANGE
+            if (message == 0x02B1 && window == _window && _protectSessionLock) // WM_WTSSESSION_CHANGE
             {
                 if (wParam == 7)
                 {
@@ -335,6 +352,8 @@ public sealed class MagnificationEngine : IDisposable
     {
         _lastWake = 0;
         _resumeAt = 0;
+        if (_desktopInactive)
+            return;
         Native.SetTimer(_window, 1, 1000, 0);
         foreach (var presenter in _presenters.Values)
             presenter.SetProfile(presenter.Profile, presenter.Gain, true);
@@ -360,6 +379,8 @@ public sealed class MagnificationEngine : IDisposable
 
     private void SynchronizeDisplays()
     {
+        if (_desktopInactive)
+            return;
         var displays = DisplayCatalog.GetDisplays();
         _plan = DesktopRenderPlan.Create(
             displays,
@@ -469,6 +490,29 @@ public sealed class MagnificationEngine : IDisposable
 
     private void Tick()
     {
+        if (_trackInputDesktop)
+        {
+            var inactive = !InputDesktop.IsActive(_threadDesktop);
+            if (inactive != _desktopInactive)
+            {
+                _desktopInactive = inactive;
+                if (inactive)
+                {
+                    foreach (var presenter in _presenters.Values)
+                        presenter.Hide();
+                    Native.SetTimer(_window, 1, 100, 0);
+                    _log?.Invoke("Input desktop changed; renderer updates suspended.");
+                }
+                else
+                {
+                    Native.SetTimer(_window, 1, Black ? 1000u : 16u, 0);
+                    SynchronizeDisplays();
+                    _log?.Invoke("Input desktop restored; profiles reapplied.");
+                }
+            }
+            if (_desktopInactive)
+                return;
+        }
         if (_desktopGain is not null)
         {
             if (
@@ -538,7 +582,10 @@ public sealed class MagnificationEngine : IDisposable
             _desktopGain,
             _presenters.Count,
             _cursorMonitor
-        );
+        )
+        {
+            InputDesktopInactive = _desktopInactive,
+        };
 
     private void PublishStatus()
     {
@@ -714,6 +761,12 @@ public sealed class MagnificationEngine : IDisposable
             // SHOWWINDOW prevents that hint from hiding the first color surface.
             Native.SetWindowPos(Host, -1, 0, 0, 0, 0, 0x53);
             _shown = true;
+        }
+
+        public void Hide()
+        {
+            Native.ShowWindow(Host, 0);
+            _shown = false;
         }
 
         public void VerifyAndRaise()

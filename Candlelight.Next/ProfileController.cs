@@ -10,14 +10,19 @@ internal sealed class ProfileController : IDisposable
     private readonly SemaphoreSlim _apply = new(1);
     private readonly Dictionary<string, (ColorProfile Profile, bool Enabled)> _last = new();
     private bool? _lastCursorFiltering;
+    private byte[]? _lastSecureProfiles;
+    private long _lastSecurePublish;
     private readonly Task _loop;
+    private readonly Action<string> _log;
     public MagnificationEngine Engine { get; }
     public string? Error { get; private set; }
+    public string? SecureDesktopError { get; private set; }
 
     public ProfileController(ProfileStore store, Action<string> log)
     {
         _store = store;
-        Engine = new(log);
+        _log = log;
+        Engine = new(log, trackInputDesktop: true);
         _loop = Task.Run(async () =>
         {
             try
@@ -54,6 +59,34 @@ internal sealed class ProfileController : IDisposable
             _store.EnsureDisplays(DisplayCatalog.GetDisplays());
             var now = TimeOnly.FromDateTime(DateTime.Now);
             var settings = _store.Read();
+            try
+            {
+                var secure = SecureDesktopProfiles.Encode(
+                    settings.Monitors.Select(m => new SecureMonitorProfile(
+                        m.Id,
+                        m.Enabled,
+                        m.Manual,
+                        m.Scheduled ? m.Schedule.ToArray() : []
+                    ))
+                );
+                if (
+                    _lastSecureProfiles is null
+                    || !secure.AsSpan().SequenceEqual(_lastSecureProfiles)
+                    || Environment.TickCount64 - _lastSecurePublish > 10000
+                )
+                {
+                    SecureDesktopProfiles.Publish(secure);
+                    _lastSecureProfiles = secure;
+                    _lastSecurePublish = Environment.TickCount64;
+                }
+                SecureDesktopError = null;
+            }
+            catch (Exception error) when (error is not OperationCanceledException)
+            {
+                if (SecureDesktopError != error.Message)
+                    _log("Secure profile transfer failed: " + error.Message);
+                SecureDesktopError = error.Message;
+            }
             if (_lastCursorFiltering != settings.FilterCursor)
             {
                 await Engine.SetCursorFilteringAsync(settings.FilterCursor);

@@ -89,7 +89,7 @@ internal sealed class MixedRendererProbe : Form
                 "Own dark patches painted on both monitors."
             );
             await Task.Delay(250);
-            using var engine = new MagnificationEngine();
+            using var engine = new MagnificationEngine(trackInputDesktop: true);
             await engine.Ready;
             await engine.SetCursorFilteringAsync(false);
             var primary = _displays.Single(d => d.Primary);
@@ -101,6 +101,7 @@ internal sealed class MixedRendererProbe : Form
             var state = await engine.InspectAsync();
             if (
                 state.Renderer != "DesktopWithLocalCorrections"
+                || state.InputDesktopInactive
                 || !state.DesktopEffectVerified
                 || state.LocalSurfaces != 1
                 || state.Monitors.Single(m => m.Display.Id == primary.Id).Profile != warm
@@ -407,6 +408,51 @@ internal sealed class MixedRendererProbe : Form
                     state = cursorState,
                 }
             );
+            engine.Dispose();
+            using (
+                var secureEngine = new MagnificationEngine(
+                    allowDesktopEffect: false,
+                    manageSystemCursors: false,
+                    protectSessionLock: false,
+                    trackInputDesktop: true
+                )
+            )
+            {
+                await secureEngine.Ready;
+                await secureEngine.ApplyProfilesAsync([
+                    (primary.Id, warm, true),
+                    (secondary.Id, red, true),
+                ]);
+                await Task.Delay(350);
+                var secureState = await secureEngine.InspectAsync();
+                if (
+                    secureState.InputDesktopInactive
+                    || secureState.LocalSurfaces != 2
+                    || secureState.Renderer != "PerMonitorWindows"
+                    || secureState.SystemCursorsFiltered
+                )
+                    throw new InvalidOperationException(
+                        "The isolated secure renderer configuration failed on the test desktop."
+                    );
+                CheckPixels(
+                    primary,
+                    ChannelGain.FromProfile(warm),
+                    "secure-configuration-primary-pixels"
+                );
+                CheckPixels(
+                    secondary,
+                    ChannelGain.FromProfile(red),
+                    "secure-configuration-oled-pixels"
+                );
+                _results.Add(
+                    new
+                    {
+                        test = "secure-renderer-configuration-on-normal-desktop",
+                        passed = true,
+                        state = secureState,
+                    }
+                );
+            }
             File.WriteAllText(
                 Path.Combine(_directory, "verification.txt"),
                 "PASS: mixed warm/red real monitors, one local surface, preserved profiles, exact local red channels/brightness, dim matrix composition, pause isolation, black/resume, native cursor recolor/restore, desktop matrix readback. Physical taskbar/cursor feedback remains required."

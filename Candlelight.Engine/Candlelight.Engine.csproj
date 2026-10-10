@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>0.2.5</Version>
+    <Version>0.2.6</Version>
+    <Win32Resource>obj/Accessibility.res</Win32Resource>
     <DefineConstants>$(DefineConstants);CANDLELIGHT_ENGINE</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
@@ -10,4 +11,7 @@
     <InternalsVisibleTo Include="LightBulb.Core.Tests" />
     <InternalsVisibleTo Include="Candlelight.Next" />
   </ItemGroup>
+  <Target Name="CreateAccessibilityResources" BeforeTargets="CoreCompile">
+    <Exec Command="powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)/../scripts/write-accessibility-resource.ps1&quot; -OutputPath &quot;$(MSBuildProjectDirectory)/$(Win32Resource)&quot;" />
+  </Target>
 </Project>

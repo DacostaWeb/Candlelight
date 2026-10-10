@@ -74,7 +74,15 @@ internal sealed class AppContext : ApplicationContext
         _ = ServeAsync();
         if (!hidden)
             Show();
-        Log("Started 0.2.5. UI and renderer have independent lifetimes. Settings=" + store.Path);
+        Log("Started 0.2.6. UI and renderer have independent lifetimes. Settings=" + store.Path);
+        try
+        {
+            AssistiveTechnology.Notify(true);
+        }
+        catch (Exception error)
+        {
+            Log("Accessibility start notification failed: " + error.Message);
+        }
     }
 
     private static string AppContextBase() => System.AppContext.BaseDirectory;
@@ -210,9 +218,10 @@ internal sealed class AppContext : ApplicationContext
         }
         return new
         {
-            version = "0.2.5",
+            version = "0.2.6",
             windowVisible = _window.Visible,
             error = _controller.Error,
+            secureDesktopError = _controller.SecureDesktopError,
             engine = await _controller.Engine.InspectAsync(),
             settings = _store.Read(),
         };
@@ -237,6 +246,14 @@ internal sealed class AppContext : ApplicationContext
             return;
         _disposed = true;
         _stop.Cancel();
+        try
+        {
+            AssistiveTechnology.Notify(false);
+        }
+        catch (Exception error)
+        {
+            Log("Accessibility stop notification failed: " + error.Message);
+        }
         _controller.Dispose();
         _tray.Visible = false;
         _tray.Dispose();

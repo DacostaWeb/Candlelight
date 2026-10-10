@@ -219,6 +219,12 @@ Physical gates before treating this as a reliable replacement:
 
 ## Run and build
 
+Version 0.2.6 adds an experimental alternate renderer for the Windows protected
+desktop. It requires explicit AT registration in addition to the existing
+UIAccess installation. See [protected desktop prototype](secure-desktop.md) for
+its installation boundary, profile transfer, tests and limitations. A normal
+launch does not install the machine registration or change UAC policy.
+
 Version 0.2.3 applies the approved candle-tip icon with the smaller flame to the
 executable, control window and notification area. The same shared icon is used
 by the legacy executable and installer; see [icon sources and export](https://github.com/DacostaWeb/Candlelight/blob/prime/assets/icon/README.md).

@@ -5,6 +5,32 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        var secureImage = string.Equals(
+            Path.GetFileNameWithoutExtension(Environment.ProcessPath),
+            "Candlelight.Secure",
+            StringComparison.OrdinalIgnoreCase
+        );
+        if (secureImage || args.Contains("--secure-desktop"))
+        {
+            if (!secureImage || !args.SequenceEqual(new[] { "--secure-desktop" }))
+                return 3;
+            try
+            {
+                return SecureDesktopHost.Run();
+            }
+            catch
+            {
+                return 1;
+            } // Never create a crash/error dialog on Winlogon.
+        }
+        if (
+            !string.Equals(
+                Candlelight.Engine.InputDesktop.ThreadName,
+                "Default",
+                StringComparison.OrdinalIgnoreCase
+            )
+        )
+            return 3;
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
