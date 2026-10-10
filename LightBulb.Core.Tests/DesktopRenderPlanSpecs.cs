@@ -8,6 +8,51 @@ namespace Candlelight.Engine.Tests;
 
 public class DesktopRenderPlanSpecs
 {
+    [Theory]
+    [InlineData(1800, 500, false)]
+    [InlineData(1855, 500, false)]
+    [InlineData(1856, 500, true)]
+    [InlineData(1919, 500, true)]
+    [InlineData(1920, 500, true)]
+    [InlineData(1984, 500, true)]
+    public void Pointer_uses_red_before_its_hotspot_enters_the_oled(int x, int y, bool red)
+    {
+        var warm = new ColorProfile(ColorMode.Temperature, 2700, 1);
+        var plan = DesktopRenderPlan.Create(
+            [Internal, Oled],
+            new Dictionary<string, (ColorProfile, bool)>
+            {
+                [Internal.Id] = (warm, true),
+                [Oled.Id] = (new(ColorMode.PureRed, 500, .15), true),
+            },
+            true
+        );
+        plan.CursorGainAt(x, y, 64)
+            .Should()
+            .Be(red ? new(.15, 0, 0) : ChannelGain.FromProfile(warm));
+        // Cursor seam protection must never alter either desktop profile.
+        plan.Monitors[0].Gain.Should().Be(ChannelGain.FromProfile(warm));
+        plan.Monitors[1].Gain.Should().Be(new ChannelGain(.15, 0, 0));
+    }
+
+    [Fact]
+    public void Pointer_guard_supports_negative_coordinates_and_vertical_layouts()
+    {
+        var upper = Oled with { Left = -1920, Top = -1080 };
+        var lower = Internal with { Left = -1920 };
+        var plan = DesktopRenderPlan.Create(
+            [lower, upper],
+            new Dictionary<string, (ColorProfile, bool)>
+            {
+                [upper.Id] = (new(ColorMode.PureRed, 500, .15), true),
+            },
+            true
+        );
+        plan.CursorGainAt(-500, 63, 64).Should().Be(new ChannelGain(.15, 0, 0));
+        plan.CursorGainAt(-500, 64, 64).Should().Be(new ChannelGain(1, 1, 1));
+        plan.CursorGainAt(0, -500, 64).Should().Be(new ChannelGain(1, 1, 1));
+    }
+
     private static readonly DisplayDescriptor Internal = new(
         "internal",
         "Internal",

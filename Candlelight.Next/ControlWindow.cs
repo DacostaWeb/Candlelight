@@ -361,6 +361,10 @@ internal sealed class ControlWindow : Form
                     ? "Não foi possível confirmar o filtro de cor."
                 : snapshot.Renderer == "PerMonitorWindows"
                     ? "Perfis separados: a barra de tarefas pode ficar sem filtro."
+                : !snapshot.UiAccessEnabled
+                && snapshot.DesktopGain is { } shared
+                && ChannelGain.FromProfile(state.Profile) != shared
+                    ? $"Ativo · {color} · menus do Windows com cobertura limitada."
                 : $"Ativo · {color} · {state.Profile.Brightness:P0}"
             );
     }

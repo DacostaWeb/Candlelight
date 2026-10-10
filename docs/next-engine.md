@@ -44,15 +44,46 @@ For the tested internal 2700 K / 100% and OLED pure-red / 15% combination, the
 shared gain equals the internal profile. Its entire desktop, including the main
 taskbar, receives that color without a local surface. Only the OLED needs a
 local correction (red 0.15, green/blue zero). The user previously confirmed
-global taskbar coverage on the internal panel and local coverage on the OLED;
-physical confirmation of this combined path remains required.
+global taskbar coverage on the internal panel and idle local coverage on the OLED.
+In 0.2.4, the user confirmed normal cursor movement, but interactive taskbar/Start
+and drag previews bypassed the OLED local surface. This is not a verified shell
+coverage solution.
 The preceding desktop effect is saved and
 restored when the filter is paused or the app exits, provided another application
 has not replaced it. Resume uses a black desktop effect for 300 ms before the
 desired color. Matrix readback is exposed as `DesktopEffectVerified`; it is not
 a measurement of panel light or proof of physical wake behavior.
 
-### Native cursor filtering without trails (0.2.2–0.2.4)
+### Accessibility installation for shell coverage (0.2.5)
+
+The optional `CandlelightUIAccess=true` build declares `uiAccess=true` for the
+color-filtering accessibility renderer. Windows requires an Authenticode-signed,
+trusted executable in a protected location such as Program Files. This grants
+access above protected application UI; it does not grant access to the secure
+desktop. See [Microsoft's UIAccess requirements](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-securityoverview).
+
+`scripts/publish-next.ps1 -UIAccess` publishes this separate build; the normal
+portable build retains `uiAccess=false`. `scripts/prepare-uiaccess.ps1` signs a
+local test release, exports its public certificate and records SHA256 hashes of
+all package files. Its nonexportable signing key is deleted after preparation.
+It never adds certificate trust, installs files or launches the renderer.
+
+After explicit approval of this local trust change, `scripts/install-uiaccess.ps1`
+can install the verified package in `Program Files/Candlelight/0.2.5.uiaccess`,
+with administrators/SYSTEM allowed to write and normal users allowed only to
+read/execute. It trusts only the prepared certificate in LocalMachine/Root;
+Windows signature validation must then pass. No UIAccess policy is disabled.
+`-VerifyOnly` checks the package without elevation or system changes. The script
+reports the exact certificate path for removal and does not change startup or
+launch an elevated renderer. Profiles remain in the existing user settings file.
+
+`UiAccessEnabled` reports the actual process token flag, not the requested
+manifest setting. The normal build warns when a selected profile needs a local
+surface without this access. An enabled token and a successful native color
+matrix readback still do not certify OLED taskbar, Start or drag-preview pixels:
+that build requires a physical interaction test after installation.
+
+### Native cursor filtering without trails (0.2.2–0.2.5)
 
 On this driver, the desktop color effect leaves the hardware cursor white.
 A temporary minimum mouse-trails experiment made it warm, including over the
@@ -66,7 +97,13 @@ the current temperature/brightness or exact-red gains to their pixels. Copies
 come from the original images, so profile changes never compound their tint.
 The pointer's current physical monitor selects its final gain; the global/local
 desktop factors are not applied twice to its pixels. Monitor membership is
-checked on the renderer timer using cached display bounds. An unchanged gain
+checked on the renderer timer using cached display bounds. Version 0.2.5 uses
+the componentwise minimum of nearby monitor gains within a seam margin of at
+least 64 physical pixels, enlarged for larger standard cursor images. The pointer
+can therefore turn red slightly before its hotspot reaches the OLED, protecting
+the leading pixels of its shape. This does not change either desktop profile.
+It remains a timer-driven replacement, not a guarantee against every extremely
+fast crossing. An unchanged gain
 does not replace cursors or write recovery state. Both magnifier paths keep the
 system pointer visible and omit `MS_SHOWMAGNIFIEDCURSOR`, so pointer motion is
 independent of captured desktop frames. No mouse-speed or trails setting changes.

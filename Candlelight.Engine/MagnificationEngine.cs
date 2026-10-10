@@ -25,7 +25,10 @@ public sealed record EngineSnapshot(
     ChannelGain? DesktopGain,
     int LocalSurfaces,
     string? CursorMonitor
-);
+)
+{
+    public bool UiAccessEnabled { get; } = DesktopAccess.UiAccessEnabled;
+}
 
 /// <summary>
 /// A desktop color renderer with its own thread, message loop and native windows.
@@ -433,7 +436,9 @@ public sealed class MagnificationEngine : IDisposable
         {
             var monitor = Native.GetCursorPos(out var cursor) ? _plan.At(cursor.X, cursor.Y) : null;
             _cursorMonitor = monitor?.Display.Id;
-            var gain = monitor?.Gain ?? new(1, 1, 1);
+            var gain = monitor is null
+                ? new ChannelGain(1, 1, 1)
+                : _plan.CursorGainAt(cursor.X, cursor.Y, _systemCursors?.BoundaryMargin ?? 64);
             var black = Black && monitor?.Enabled == true;
             if (_filterCursors && !_locked && (black || gain != new ChannelGain(1, 1, 1)))
                 _systemCursors?.Apply(black ? new(0, 0, 0) : gain);

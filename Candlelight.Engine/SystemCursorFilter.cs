@@ -44,6 +44,14 @@ internal sealed class SystemCursorFilter : IDisposable
     private ChannelGain? _gain;
     private bool _recovered;
     public bool Active => _gain is not null && _owned.Count == Ids.Length;
+    public int BoundaryMargin =>
+        Math.Max(
+            64,
+            _originals
+                .Values.Select(o => Math.Max(o.Image.Width, o.Image.Height))
+                .DefaultIfEmpty(0)
+                .Max()
+        );
 
     public SystemCursorFilter(Action<string>? log) => _log = log;
 

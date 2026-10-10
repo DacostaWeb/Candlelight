@@ -1,13 +1,14 @@
 param(
     [string]$DotNetExecutable = 'dotnet',
-    [string]$OutputDirectory
+    [string]$OutputDirectory,
+    [switch]$UIAccess
 )
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $outputDir = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else { Join-Path $projectRoot 'artifacts/Candlelight.Next.win-x64' }
 
-& $DotNetExecutable publish (Join-Path $projectRoot 'Candlelight.Next/Candlelight.Next.csproj') --configuration Release --runtime win-x64 --self-contained --output $outputDir
+& $DotNetExecutable publish (Join-Path $projectRoot 'Candlelight.Next/Candlelight.Next.csproj') --configuration Release --runtime win-x64 --self-contained --output $outputDir -m:1 "-p:CandlelightUIAccess=$($UIAccess.IsPresent.ToString().ToLowerInvariant())"
 if ($LASTEXITCODE -ne 0) { throw 'Publishing Candlelight Next failed.' }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'License.txt'), (Join-Path $projectRoot 'THIRD_PARTY.md') -Destination $outputDir
 Copy-Item -LiteralPath (Join-Path $projectRoot 'favicon.png') -Destination $outputDir

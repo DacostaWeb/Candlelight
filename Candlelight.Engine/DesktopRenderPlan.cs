@@ -77,4 +77,33 @@ internal sealed record DesktopRenderPlan(
             && y >= m.Display.Top
             && y < m.Display.Top + m.Display.Height
         );
+
+    // Windows colors the entire native pointer with one gain. Near a seam, use
+    // the most attenuated channels of the displays it can overlap, before the
+    // hotspot itself crosses. This deliberately colors the pointer slightly
+    // early on the brighter display; the desktop profiles remain independent.
+    public ChannelGain CursorGainAt(int x, int y, int margin)
+    {
+        var owner = At(x, y);
+        if (owner is null)
+            return new(1, 1, 1);
+        var gain = owner.Gain;
+        foreach (var monitor in Monitors)
+        {
+            var display = monitor.Display;
+            if (
+                (long)x + margin < display.Left
+                || (long)x - margin >= (long)display.Left + display.Width
+                || (long)y + margin < display.Top
+                || (long)y - margin >= (long)display.Top + display.Height
+            )
+                continue;
+            gain = new(
+                Math.Min(gain.Red, monitor.Gain.Red),
+                Math.Min(gain.Green, monitor.Gain.Green),
+                Math.Min(gain.Blue, monitor.Gain.Blue)
+            );
+        }
+        return gain;
+    }
 }
