@@ -16,7 +16,14 @@ read access only.
 
 The ordinary controller publishes monitor IDs, enable flags, manual colors and
 active schedules under the documented ATConfig registry location. Windows copies
-this configuration to the secure desktop. The reader bounds registry allocation
+this configuration to the secure desktop where supported. In the actual UAC test
+on this PC, Windows launched the alternate renderer as SYSTEM on Winlogon but
+did not provide the copied configuration. The installed transfer hotfix uses
+`WTSQuerySessionInformation` to identify the signed-in owner of its own session,
+resolves that account's SID, and reads only Candlelight's fixed ATConfig location
+in that user's loaded registry hive. It does not acquire a user token, impersonate,
+change registry permissions or accept a source path from settings.
+The reader bounds registry allocation
 before reading, limits JSON depth/size, rejects unknown fields and invalid color
 ranges, and checks monitor/schedule counts, duplicate IDs and times. Transferred
 data contains no commands, plugins, file paths or executable names. Unknown
@@ -36,12 +43,16 @@ The installer protects that directory against ordinary-user writes. This
 snapshot reports API/source-update state, not actual scanout or first-frame
 coverage.
 
-Validation: 165 unit tests, bounded settings transfer rejection tests, native
+Validation: 166 unit tests, including native session-owner identity resolution,
+bounded settings transfer rejection tests, native
 resource resolution, rejection of ordinary-desktop helper launches, and the
 existing mixed-monitor/cursor probe plus a pixel check of the isolated renderer
-configuration on the ordinary desktop. A real UAC test must separately confirm
-that Windows launches the alternate image, transfers profiles and displays
-correct colors on both monitors. Registration alone is not proof of these.
+configuration on the ordinary desktop. Real UAC tests confirmed a SYSTEM
+Winlogon instance with both monitor profiles, two local surfaces, advancing
+source-update counts and no reported render errors. On return the ordinary
+renderer resumes with its original profiles and native cursor filter. This is
+API/runtime evidence; physical appearance and first-frame coverage still require
+the user's observation.
 No guarantee of a filtered first frame, filtered cursor, logon or suspend/wake
 behavior is made until physical tests pass.
 

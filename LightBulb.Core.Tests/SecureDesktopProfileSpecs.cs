@@ -10,6 +10,16 @@ namespace Candlelight.Engine.Tests;
 
 public class SecureDesktopProfileSpecs
 {
+    [Fact]
+    public void Windows_session_identity_matches_the_current_user()
+    {
+        using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+        SessionAccount
+            .UserSid(System.Diagnostics.Process.GetCurrentProcess().SessionId)
+            .Should()
+            .Be(identity.User!.Value);
+    }
+
     private static SecureMonitorProfile Oled =>
         new("edid:OLED", true, new(ColorMode.PureRed, 500, .15), []);
 

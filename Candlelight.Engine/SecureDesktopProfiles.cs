@@ -110,10 +110,32 @@ public static class SecureDesktopProfiles
 
     public static SecureMonitorProfile[] Read()
     {
+        var copied = ReadHive(Registry.CurrentUser, "");
+        if (copied is not null)
+            return copied;
+        using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+        if (identity.IsSystem)
+        {
+            // Some Windows builds launch the alternate AT without copying its
+            // configuration. Identify this session's owner through Windows,
+            // then read only our bounded, untrusted color data from their hive.
+            // No impersonation, user token acquisition or user-supplied paths.
+            var sid = SessionAccount.UserSid(
+                System.Diagnostics.Process.GetCurrentProcess().SessionId
+            );
+            var sessionProfiles = ReadHive(Registry.Users, sid + "\\");
+            if (sessionProfiles is not null)
+                return sessionProfiles;
+        }
+        throw new InvalidDataException("Secure profile transfer is unavailable.");
+    }
+
+    private static SecureMonitorProfile[]? ReadHive(RegistryKey hive, string prefix)
+    {
         foreach (var registration in new[] { SecureRegistration, Registration })
         {
-            using var key = Registry.CurrentUser.OpenSubKey(
-                AccessibilityPath + @"\ATConfig\" + registration
+            using var key = hive.OpenSubKey(
+                prefix + AccessibilityPath + @"\ATConfig\" + registration
             );
             if (key is null)
                 continue;
@@ -129,7 +151,7 @@ public static class SecureDesktopProfiles
                 throw new InvalidDataException("Secure profile transfer changed while reading.");
             return Decode(bytes);
         }
-        throw new InvalidDataException("Secure profile transfer is unavailable.");
+        return null;
     }
 
     [DllImport("advapi32.dll", EntryPoint = "RegQueryValueExW", CharSet = CharSet.Unicode)]
