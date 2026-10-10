@@ -5,6 +5,24 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        var brokerImage = string.Equals(
+            Path.GetFileNameWithoutExtension(Environment.ProcessPath),
+            "Candlelight.SecureBroker",
+            StringComparison.OrdinalIgnoreCase
+        );
+        if (brokerImage || args.Contains("--secure-broker"))
+        {
+            if (!brokerImage || !args.SequenceEqual(new[] { "--secure-broker" }))
+                return 3;
+            try
+            {
+                return SecureDesktopBroker.Run();
+            }
+            catch
+            {
+                return 1;
+            }
+        }
         var secureImage = string.Equals(
             Path.GetFileNameWithoutExtension(Environment.ProcessPath),
             "Candlelight.Secure",

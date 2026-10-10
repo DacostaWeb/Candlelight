@@ -219,11 +219,14 @@ Physical gates before treating this as a reliable replacement:
 
 ## Run and build
 
-Version 0.2.6 adds an experimental alternate renderer for the Windows protected
-desktop. It requires explicit AT registration in addition to the existing
-UIAccess installation. See [protected desktop prototype](secure-desktop.md) for
-its installation boundary, profile transfer, tests and limitations. A normal
-launch does not install the machine registration or change UAC policy.
+Versions 0.2.6–0.2.9 add an experimental alternate renderer for the Windows
+protected desktop, a fixed LocalSystem prewarming service, and black local
+surfaces during the return to the ordinary desktop. The user observed no OLED
+return flash in the repeated 0.2.9 HDMI UAC test. This requires explicit AT/service
+installation in addition to the existing UIAccess installation. See
+[protected desktop prototype](secure-desktop.md) for the installation boundary,
+profile transfer, tests and limitations. A normal launch does not install the
+machine registration/service or change UAC policy.
 
 Version 0.2.3 applies the approved candle-tip icon with the smaller flame to the
 executable, control window and notification area. The same shared icon is used

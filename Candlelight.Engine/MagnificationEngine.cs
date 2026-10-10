@@ -78,6 +78,8 @@ public sealed class MagnificationEngine : IDisposable
     private string? _threadDesktop;
     private bool _desktopInactive;
     private readonly Func<nint[]>? _captureExclusions;
+    private readonly bool _keepInactiveLocalSurfaces;
+    private readonly bool _blackInactiveLocalSurfaces;
 
     public event Action<EngineSnapshot>? StatusChanged;
     public Task Ready => _started.Task;
@@ -88,17 +90,23 @@ public sealed class MagnificationEngine : IDisposable
         bool manageSystemCursors = true,
         bool protectSessionLock = true,
         bool trackInputDesktop = false,
-        Func<nint[]>? captureExclusions = null
+        Func<nint[]>? captureExclusions = null,
+        bool keepInactiveLocalSurfaces = false,
+        bool blackInactiveLocalSurfaces = false
     )
     {
         if (!OperatingSystem.IsWindows() || !Environment.Is64BitProcess)
             throw new PlatformNotSupportedException("The color renderer requires 64-bit Windows.");
+        if (keepInactiveLocalSurfaces && (allowDesktopEffect || manageSystemCursors))
+            throw new ArgumentException("Inactive surfaces require an isolated local renderer.");
         _log = log;
         _allowDesktopEffect = allowDesktopEffect;
         _manageSystemCursors = manageSystemCursors;
         _protectSessionLock = protectSessionLock;
         _trackInputDesktop = trackInputDesktop;
         _captureExclusions = captureExclusions;
+        _keepInactiveLocalSurfaces = keepInactiveLocalSurfaces;
+        _blackInactiveLocalSurfaces = blackInactiveLocalSurfaces;
         _procedure = WindowProcedure;
         _thread = new Thread(Run) { IsBackground = true, Name = "Candlelight color renderer" };
         _thread.SetApartmentState(ApartmentState.STA);
@@ -184,6 +192,7 @@ public sealed class MagnificationEngine : IDisposable
                 throw Error("MagInitialize");
             _initialized = true;
             _threadDesktop = InputDesktop.ThreadName;
+            _desktopInactive = _trackInputDesktop && !InputDesktop.IsActive(_threadDesktop);
             if (_manageSystemCursors)
                 _systemCursors = new(_log);
             var windowClass = new Native.WindowClass
@@ -349,7 +358,11 @@ public sealed class MagnificationEngine : IDisposable
     }
 
     private bool Black =>
-        _sleeping || _locked || _displayOff || Environment.TickCount64 < _resumeAt;
+        _sleeping
+        || _locked
+        || _displayOff
+        || Environment.TickCount64 < _resumeAt
+        || ((_keepInactiveLocalSurfaces || _blackInactiveLocalSurfaces) && _desktopInactive);
 
     private void Protect(string reason)
     {
@@ -382,7 +395,7 @@ public sealed class MagnificationEngine : IDisposable
 
     private void SynchronizeDisplays()
     {
-        if (_desktopInactive)
+        if (_desktopInactive && !_keepInactiveLocalSurfaces)
             return;
         var displays = DisplayCatalog.GetDisplays();
         _plan = DesktopRenderPlan.Create(
@@ -508,19 +521,43 @@ public sealed class MagnificationEngine : IDisposable
                 if (inactive)
                 {
                     foreach (var presenter in _presenters.Values)
-                        presenter.Hide();
-                    Native.SetTimer(_window, 1, 100, 0);
+                        if (_keepInactiveLocalSurfaces || _blackInactiveLocalSurfaces)
+                            presenter.SetProfile(presenter.Profile, presenter.Gain, true);
+                        else
+                            presenter.Hide();
+                    Native.SetTimer(
+                        _window,
+                        1,
+                        _keepInactiveLocalSurfaces || _blackInactiveLocalSurfaces ? 16u : 100u,
+                        0
+                    );
                     _log?.Invoke("Input desktop changed; renderer updates suspended.");
                 }
                 else
                 {
-                    Native.SetTimer(_window, 1, Black ? 1000u : 16u, 0);
+                    if (_blackInactiveLocalSurfaces)
+                        _resumeAt = Math.Max(_resumeAt, Environment.TickCount64 + 300);
+                    Native.SetTimer(
+                        _window,
+                        1,
+                        _sleeping || _displayOff || _locked ? 1000u : 16u,
+                        0
+                    );
                     SynchronizeDisplays();
                     _log?.Invoke("Input desktop restored; profiles reapplied.");
                 }
             }
             if (_desktopInactive)
+            {
+                // These windows belong to the invisible Winlogon desktop, not Default.
+                if (_keepInactiveLocalSurfaces && Environment.TickCount64 - _lastStatus >= 100)
+                {
+                    foreach (var presenter in _presenters.Values)
+                        presenter.VerifyAndRaise();
+                    _lastStatus = Environment.TickCount64;
+                }
                 return;
+            }
         }
         if (_desktopGain is not null)
         {

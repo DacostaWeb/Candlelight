@@ -89,7 +89,10 @@ internal sealed class MixedRendererProbe : Form
                 "Own dark patches painted on both monitors."
             );
             await Task.Delay(250);
-            using var engine = new MagnificationEngine(trackInputDesktop: true);
+            using var engine = new MagnificationEngine(
+                trackInputDesktop: true,
+                blackInactiveLocalSurfaces: true
+            );
             await engine.Ready;
             await engine.SetCursorFilteringAsync(false);
             var primary = _displays.Single(d => d.Primary);

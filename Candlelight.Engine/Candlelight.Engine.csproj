@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>0.2.7</Version>
+    <Version>0.2.9</Version>
     <Win32Resource>obj/Accessibility.res</Win32Resource>
     <DefineConstants>$(DefineConstants);CANDLELIGHT_ENGINE</DefineConstants>
   </PropertyGroup>

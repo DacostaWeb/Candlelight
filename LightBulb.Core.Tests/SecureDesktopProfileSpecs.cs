@@ -10,6 +10,23 @@ namespace Candlelight.Engine.Tests;
 
 public class SecureDesktopProfileSpecs
 {
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void Inactive_preparation_cannot_write_shared_desktop_or_system_cursor_state(
+        bool desktop,
+        bool cursor
+    )
+    {
+        Action create = () =>
+            new MagnificationEngine(
+                allowDesktopEffect: desktop,
+                manageSystemCursors: cursor,
+                keepInactiveLocalSurfaces: true
+            );
+        create.Should().Throw<ArgumentException>();
+    }
+
     [Fact]
     public void Windows_session_identity_matches_the_current_user()
     {

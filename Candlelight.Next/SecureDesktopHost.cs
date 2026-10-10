@@ -79,7 +79,8 @@ internal static class SecureDesktopHost
                 manageSystemCursors: false,
                 protectSessionLock: false,
                 trackInputDesktop: true,
-                captureExclusions: () => cover.Windows
+                captureExclusions: () => cover.Windows,
+                keepInactiveLocalSurfaces: true
             );
             engine.Ready.GetAwaiter().GetResult();
             engine
@@ -98,7 +99,8 @@ internal static class SecureDesktopHost
                 Thread.Sleep(16);
                 prepared = engine.InspectAsync().GetAwaiter().GetResult();
             } while (
-                prepared.Monitors.Any(m => m.Enabled && m.Frames < 2)
+                !prepared.InputDesktopInactive
+                && prepared.Monitors.Any(m => m.Enabled && m.Frames < 2)
                 && Environment.TickCount64 < deadline
             );
             Native.DwmFlush();
@@ -106,7 +108,7 @@ internal static class SecureDesktopHost
             var rendererReadyMilliseconds = startup.ElapsedMilliseconds;
             var desktop = InputDesktop.ThreadName;
             bool? previouslyActive = null;
-            EngineSnapshot? last = null;
+            EngineSnapshot? last = prepared;
             do
             {
                 var active = InputDesktop.IsActive(desktop);

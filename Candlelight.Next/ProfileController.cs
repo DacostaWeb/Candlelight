@@ -22,7 +22,7 @@ internal sealed class ProfileController : IDisposable
     {
         _store = store;
         _log = log;
-        Engine = new(log, trackInputDesktop: true);
+        Engine = new(log, trackInputDesktop: true, blackInactiveLocalSurfaces: true);
         _loop = Task.Run(async () =>
         {
             try

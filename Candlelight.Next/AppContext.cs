@@ -74,7 +74,7 @@ internal sealed class AppContext : ApplicationContext
         _ = ServeAsync();
         if (!hidden)
             Show();
-        Log("Started 0.2.7. UI and renderer have independent lifetimes. Settings=" + store.Path);
+        Log("Started 0.2.9. UI and renderer have independent lifetimes. Settings=" + store.Path);
         try
         {
             AssistiveTechnology.Notify(true);
@@ -218,7 +218,7 @@ internal sealed class AppContext : ApplicationContext
         }
         return new
         {
-            version = "0.2.7",
+            version = "0.2.9",
             windowVisible = _window.Visible,
             error = _controller.Error,
             secureDesktopError = _controller.SecureDesktopError,
