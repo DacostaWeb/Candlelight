@@ -32,9 +32,9 @@ Source: "..\THIRD_PARTY.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Source\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 
 [Icons]
-Name: "{group}\{#AppName}"; Filename: "{app}\Candlelight.exe"
-Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"
-Name: "{group}\{#AppName} on Github"; Filename: "https://github.com/DacostaWeb/Candlelight"
+Name: "{group}\{#AppName}"; Filename: "{app}\Candlelight.exe"; IconFilename: "{app}\Candlelight.exe"
+Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"; IconFilename: "{app}\Candlelight.exe"
+Name: "{group}\{#AppName} on Github"; Filename: "https://github.com/DacostaWeb/Candlelight"; IconFilename: "{app}\Candlelight.exe"
 
 [Registry]
 Root: HKLM; Subkey: "Software\Microsoft\Windows NT\CurrentVersion\ICM"; ValueType: dword; ValueName: "GdiICMGammaRange"; ValueData: "256"

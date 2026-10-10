@@ -62,7 +62,10 @@ internal sealed class AppContext : ApplicationContext
         menu.Items.Add("Sair", null, (_, _) => ExitThread());
         _tray = new()
         {
-            Icon = new Icon(System.IO.Path.Combine(AppContextBase(), "favicon.ico")),
+            Icon = new Icon(
+                System.IO.Path.Combine(AppContextBase(), "favicon.ico"),
+                SystemInformation.SmallIconSize
+            ),
             Text = "Candlelight 0.2 · versão de teste",
             ContextMenuStrip = menu,
             Visible = true,
@@ -71,7 +74,7 @@ internal sealed class AppContext : ApplicationContext
         _ = ServeAsync();
         if (!hidden)
             Show();
-        Log("Started 0.2.2. UI and renderer have independent lifetimes. Settings=" + store.Path);
+        Log("Started 0.2.3. UI and renderer have independent lifetimes. Settings=" + store.Path);
     }
 
     private static string AppContextBase() => System.AppContext.BaseDirectory;
@@ -207,7 +210,7 @@ internal sealed class AppContext : ApplicationContext
         }
         return new
         {
-            version = "0.2.2",
+            version = "0.2.3",
             windowVisible = _window.Visible,
             error = _controller.Error,
             engine = await _controller.Engine.InspectAsync(),

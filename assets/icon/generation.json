@@ -1,0 +1,7 @@
+{
+  "mode": "built-in image_gen",
+  "source_image": "04-simples-suave.png",
+  "output_image": "04-simples-suave-v2.png",
+  "transparent_background": true,
+  "prompt": "Use case: precise-object-edit. Edit target: the attached Candlelight icon, option 4, with its smooth orange-and-gold flame, dark wick, and short cream candle top. Requested change: make ONLY the flame clearly smaller, approximately 60% of its current height AND 60% of its current width. Shrink the outer orange teardrop and inner gold flame together about their bottom center, so the little flame still sits naturally around the top of the wick. Preserve the existing flame shape, colors and clean smooth illustration style. Invariants: keep the cream candle tip, its shallow wax depression, its proportions, existing colors and dark curved wick exactly as in the reference; do not enlarge the candle or wick, do not change their shapes, do not add a longer candle body. Keep the same square canvas and preserve genuine transparency. The result should feel calmer and more balanced, with a modest little flame instead of a large fire. Do not enlarge the entire composition to compensate for the smaller flame. No lettering, no tile, no background, no shadows or glow, no new objects. Keep the candle and wick unchanged; change only the flame size."
+}

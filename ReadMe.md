@@ -1,6 +1,8 @@
 # Candlelight
 
-**0.2.2 hardware-test prototype:** a smaller, independent application now uses
+<p><img src="favicon.png" width="96" height="96" alt="Candlelight candle icon" /></p>
+
+**0.2.3 hardware-test prototype:** a smaller, independent application now uses
 the documented Windows Magnification API instead of gamma/Night Light handovers.
 With one enabled monitor, the desktop filter includes the Windows taskbar;
 coverage at 2700 K / 100% was physically confirmed on the internal panel.

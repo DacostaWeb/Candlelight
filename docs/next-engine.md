@@ -1,5 +1,7 @@
 # Candlelight 0.2: essential controls and a new renderer
 
+<p><img src="../favicon.png" width="64" height="64" alt="Candlelight candle icon" /></p>
+
 This is a hardware-test prototype. The failed 0.1.4 wake test showed black,
 then red, then white/blue, then orange. Gamma readback and fixed delays did not
 establish the final displayed color. The new application does not use that
@@ -136,6 +138,10 @@ Physical gates before treating this as a reliable replacement:
    is not promised by this user-session renderer.
 
 ## Run and build
+
+Version 0.2.3 applies the approved candle-tip icon with the smaller flame to the
+executable, control window and notification area. The same shared icon is used
+by the legacy executable and installer; see [icon sources and export](https://github.com/DacostaWeb/Candlelight/blob/prime/assets/icon/README.md).
 
 Run `Candlelight.Next.exe`. Settings are stored in
 `%LOCALAPPDATA%/Candlelight.Next/Settings.json`; diagnostics are bounded and stored
