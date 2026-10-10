@@ -77,6 +77,7 @@ public sealed class MagnificationEngine : IDisposable
     private readonly bool _trackInputDesktop;
     private string? _threadDesktop;
     private bool _desktopInactive;
+    private readonly Func<nint[]>? _captureExclusions;
 
     public event Action<EngineSnapshot>? StatusChanged;
     public Task Ready => _started.Task;
@@ -86,7 +87,8 @@ public sealed class MagnificationEngine : IDisposable
         bool allowDesktopEffect = true,
         bool manageSystemCursors = true,
         bool protectSessionLock = true,
-        bool trackInputDesktop = false
+        bool trackInputDesktop = false,
+        Func<nint[]>? captureExclusions = null
     )
     {
         if (!OperatingSystem.IsWindows() || !Environment.Is64BitProcess)
@@ -96,6 +98,7 @@ public sealed class MagnificationEngine : IDisposable
         _manageSystemCursors = manageSystemCursors;
         _protectSessionLock = protectSessionLock;
         _trackInputDesktop = trackInputDesktop;
+        _captureExclusions = captureExclusions;
         _procedure = WindowProcedure;
         _thread = new Thread(Run) { IsBackground = true, Name = "Candlelight color renderer" };
         _thread.SetApartmentState(ApartmentState.STA);
@@ -427,7 +430,13 @@ public sealed class MagnificationEngine : IDisposable
             _presenters.Remove(id);
         }
         // Exclude every renderer host to prevent recursive capture across monitors.
-        var excluded = _presenters.Values.Select(p => p.Host).Append(_window).ToArray();
+        var excluded = _presenters
+            .Values.Select(p => p.Host)
+            .Append(_window)
+            .Concat(_captureExclusions?.Invoke() ?? [])
+            .Where(w => w != 0)
+            .Distinct()
+            .ToArray();
         foreach (var presenter in _presenters.Values)
         {
             presenter.Exclude(excluded);

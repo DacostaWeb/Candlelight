@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Text.Json;
 using Candlelight.Engine;
@@ -28,6 +29,28 @@ internal static class SecureDesktopHost
         );
         if (!first)
             return 0;
+        using var cover = new SecureStartupCover();
+        string? coverError = null;
+        try
+        {
+            cover.Ready.WaitAsync(TimeSpan.FromSeconds(1)).GetAwaiter().GetResult();
+        }
+        catch (Exception error)
+        {
+            coverError = error.Message;
+            cover.Dispose();
+        }
+        return RunRenderer(cover, coverError);
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(
+        System.Runtime.CompilerServices.MethodImplOptions.NoInlining
+    )]
+    private static int RunRenderer(SecureStartupCover cover, string? coverError)
+    {
+        var startup = Stopwatch.StartNew();
+        var processStarted = new DateTimeOffset(Process.GetCurrentProcess().StartTime);
+        var jobQuerySucceeded = IsProcessInJob(-1, 0, out var inJob);
         var directory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
             "Candlelight",
@@ -55,9 +78,32 @@ internal static class SecureDesktopHost
                 allowDesktopEffect: false,
                 manageSystemCursors: false,
                 protectSessionLock: false,
-                trackInputDesktop: true
+                trackInputDesktop: true,
+                captureExclusions: () => cover.Windows
             );
             engine.Ready.GetAwaiter().GetResult();
+            engine
+                .ApplyProfilesAsync(
+                    profiles.Select(p =>
+                        (p.Id, p.Evaluate(TimeOnly.FromDateTime(DateTime.Now)), p.Enabled)
+                    )
+                )
+                .GetAwaiter()
+                .GetResult();
+            // Warm the sources under the cover; these counts do not certify physical scanout.
+            var deadline = Environment.TickCount64 + 500;
+            EngineSnapshot prepared;
+            do
+            {
+                Thread.Sleep(16);
+                prepared = engine.InspectAsync().GetAwaiter().GetResult();
+            } while (
+                prepared.Monitors.Any(m => m.Enabled && m.Frames < 2)
+                && Environment.TickCount64 < deadline
+            );
+            Native.DwmFlush();
+            cover.Dispose();
+            var rendererReadyMilliseconds = startup.ElapsedMilliseconds;
             var desktop = InputDesktop.ThreadName;
             bool? previouslyActive = null;
             EngineSnapshot? last = null;
@@ -86,6 +132,10 @@ internal static class SecureDesktopHost
                             pid = Environment.ProcessId,
                             active,
                             timestamp = DateTimeOffset.UtcNow,
+                            processStarted,
+                            rendererReadyMilliseconds,
+                            coverError,
+                            inJob = jobQuerySucceeded ? (bool?)inJob : null,
                             engine = last,
                         }
                     );
@@ -99,4 +149,12 @@ internal static class SecureDesktopHost
             return 1;
         }
     }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsProcessInJob(
+        nint process,
+        nint job,
+        [MarshalAs(UnmanagedType.Bool)] out bool result
+    );
 }

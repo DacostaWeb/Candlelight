@@ -31,6 +31,15 @@ internal static class Program
             )
         )
             return 3;
+        return RunOrdinary(args);
+    }
+
+    // Keep the WinForms/control-window code out of the secure entry point's JIT.
+    [System.Runtime.CompilerServices.MethodImpl(
+        System.Runtime.CompilerServices.MethodImplOptions.NoInlining
+    )]
+    private static int RunOrdinary(string[] args)
+    {
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
@@ -43,6 +52,8 @@ internal static class Program
         }
         string? Option(string name) =>
             Array.Find(args, a => a.StartsWith(name + "="))?[(name.Length + 1)..];
+        if (Option("--probe-startup-cover") is { } coverProbe)
+            return SecureStartupCoverProbe.Run(coverProbe);
         if (Option("--probe-mixed") is { } mixedProbe)
         {
             using var form = new MixedRendererProbe(mixedProbe);

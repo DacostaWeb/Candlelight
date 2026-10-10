@@ -409,12 +409,15 @@ internal sealed class MixedRendererProbe : Form
                 }
             );
             engine.Dispose();
+            using var startupCover = new SecureStartupCover();
+            await startupCover.Ready;
             using (
                 var secureEngine = new MagnificationEngine(
                     allowDesktopEffect: false,
                     manageSystemCursors: false,
                     protectSessionLock: false,
-                    trackInputDesktop: true
+                    trackInputDesktop: true,
+                    captureExclusions: () => startupCover.Windows
                 )
             )
             {
@@ -451,6 +454,22 @@ internal sealed class MixedRendererProbe : Form
                         passed = true,
                         state = secureState,
                     }
+                );
+                startupCover.Dispose();
+                await secureEngine.ApplyProfilesAsync([
+                    (primary.Id, warm, true),
+                    (secondary.Id, red, true),
+                ]);
+                await Task.Delay(100);
+                CheckPixels(
+                    primary,
+                    ChannelGain.FromProfile(warm),
+                    "secure-cover-release-primary-pixels"
+                );
+                CheckPixels(
+                    secondary,
+                    ChannelGain.FromProfile(red),
+                    "secure-cover-release-oled-pixels"
                 );
             }
             File.WriteAllText(
