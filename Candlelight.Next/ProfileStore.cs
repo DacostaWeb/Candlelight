@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Candlelight.Engine;
@@ -8,8 +12,9 @@ internal sealed record Preset(string Name, ColorProfile Profile);
 
 internal sealed record AppSettings
 {
-    public int Schema { get; init; } = 1;
+    public int Schema { get; set; } = 2;
     public bool FilterCursor { get; set; } = true;
+    public SchedulePlan Timing { get; set; } = new();
     public List<MonitorProfile> Monitors { get; set; } = [];
     public List<Preset> Presets { get; set; } =
     [
@@ -39,9 +44,22 @@ internal sealed class ProfileStore
             ? JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(Path), Json)
                 ?? throw new InvalidDataException("Settings are empty.")
             : Import(import);
-        if (_settings.Schema != 1)
+        var migrated = _settings.Schema == 1;
+        if (migrated)
+            Migrate(_settings);
+        if (_settings.Schema != 2)
             throw new InvalidDataException("Unsupported settings schema.");
+        if (_settings.Timing.Points.Count == 0)
+            SeedTiming(_settings);
         Validate(_settings);
+        if (migrated)
+        {
+            File.Copy(
+                Path,
+                Path + ".schema1-" + DateTime.UtcNow.ToString("yyyyMMddHHmmssfff") + ".bak"
+            );
+            Update(_ => { });
+        }
     }
 
     public AppSettings Read()
@@ -74,7 +92,11 @@ internal sealed class ProfileStore
         {
             foreach (var display in list)
                 if (settings.Monitors.All(m => m.Id != display.Id))
-                    settings.Monitors.Add(new() { Id = display.Id, Name = display.Name });
+                {
+                    var monitor = new MonitorProfile { Id = display.Id, Name = display.Name };
+                    SeedColors(settings, monitor);
+                    settings.Monitors.Add(monitor);
+                }
         });
     }
 
@@ -83,6 +105,7 @@ internal sealed class ProfileStore
 
     private static void Validate(AppSettings settings)
     {
+        settings.Timing.Validate();
         if (settings.Monitors.Select(m => m.Id).Distinct().Count() != settings.Monitors.Count)
             throw new InvalidDataException("Duplicate monitor identities.");
         foreach (var monitor in settings.Monitors)
@@ -90,6 +113,11 @@ internal sealed class ProfileStore
             if (string.IsNullOrWhiteSpace(monitor.Id) || string.IsNullOrWhiteSpace(monitor.Name))
                 throw new InvalidDataException("Invalid monitor identity.");
             monitor.Manual = monitor.Manual.Validate();
+            SchedulePlan.ValidatePoints(monitor.OwnTiming);
+            if (monitor.PointColors.Count > 96)
+                throw new InvalidDataException("Too many point colors.");
+            foreach (var id in monitor.PointColors.Keys.ToArray())
+                monitor.PointColors[id] = monitor.PointColors[id].Validate();
             if (monitor.Schedule.Count > 0)
                 DailySchedule.Evaluate(monitor.Schedule, TimeOnly.MinValue);
         }
@@ -99,6 +127,79 @@ internal sealed class ProfileStore
                 throw new InvalidDataException("A preset needs a name.");
             preset.Profile.Validate();
         }
+    }
+
+    internal static void SeedColors(AppSettings settings, MonitorProfile monitor)
+    {
+        var source = settings.Monitors.OrderByDescending(m => m.PointColors.Count).FirstOrDefault();
+        foreach (var point in settings.Timing.Points)
+            monitor.PointColors.TryAdd(
+                point.Id,
+                source is null ? DefaultColor(point.Time) : ScheduleTimeline.Color(source, point)
+            );
+    }
+
+    private static ColorProfile DefaultColor(TimeOnly time) =>
+        new(
+            ColorMode.Temperature,
+            time.Hour >= 22 || time.Hour < 7 ? 1800
+                : time.Hour >= 10 && time.Hour < 17 ? 6600
+                : 2700,
+            1
+        );
+
+    private static void SeedTiming(AppSettings settings)
+    {
+        settings.Timing.Points = new[] { 9, 11, 17, 22 }
+            .Select(hour => new TimingPoint("clock-" + hour, new(hour, 0)))
+            .ToList();
+    }
+
+    private static void Migrate(AppSettings settings)
+    {
+        var source = settings
+            .Monitors.Where(m => m.Schedule.Count > 0)
+            .OrderByDescending(m => m.Scheduled)
+            .ThenByDescending(m => m.Schedule.Count)
+            .FirstOrDefault();
+        if (source is null)
+            SeedTiming(settings);
+        else
+        {
+            settings.Timing.Points = source
+                .Schedule.OrderBy(p => p.Time)
+                .Select(p => new TimingPoint("clock-" + p.Time.ToString("HHmmss"), p.Time))
+                .ToList();
+            settings.Timing.TransitionMinutes = source
+                .Schedule.GroupBy(p => p.TransitionMinutes)
+                .OrderByDescending(g => g.Count())
+                .First()
+                .Key;
+        }
+        foreach (var monitor in settings.Monitors)
+        {
+            var old = monitor.Schedule;
+            monitor.UseSharedSchedule =
+                old.Count == 0
+                || old.Select(p => p.Time)
+                    .Order()
+                    .SequenceEqual(settings.Timing.Points.Select(p => p.Time).Order());
+            if (!monitor.UseSharedSchedule)
+                monitor.OwnTiming = old.Select(p => new TimingPoint(
+                        "clock-" + p.Time.ToString("HHmmss"),
+                        p.Time
+                    ))
+                    .ToList();
+            foreach (var point in ScheduleTimeline.Points(settings.Timing, monitor))
+                monitor.PointColors[point.Id] =
+                    old.FirstOrDefault(p => p.Time == point.Time)?.Profile
+                    ?? source?.Schedule.FirstOrDefault(p => p.Time == point.Time)?.Profile
+                    ?? DefaultColor(point.Time);
+        }
+        // The original file is backed up before persisting the new representation.
+        foreach (var monitor in settings.Monitors)
+            monitor.Schedule = [];
+        settings.Schema = 2;
     }
 
     private static AppSettings Import(string? path)

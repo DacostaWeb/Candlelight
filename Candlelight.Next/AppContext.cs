@@ -58,6 +58,7 @@ internal sealed class AppContext : ApplicationContext
         menu.Items.Add("Abrir", null, (_, _) => Show());
         foreach (var preset in new AppSettings().Presets)
             menu.Items.Add(preset.Name, null, (_, _) => _window.ApplyPreset(preset.Profile));
+        menu.Items.Add("Retomar horário", null, (_, _) => _window.ResumeSchedule());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Sair", null, (_, _) => ExitThread());
         _tray = new()
@@ -66,7 +67,7 @@ internal sealed class AppContext : ApplicationContext
                 System.IO.Path.Combine(AppContextBase(), "favicon.ico"),
                 SystemInformation.SmallIconSize
             ),
-            Text = "Candlelight 0.2 · versão de teste",
+            Text = "Candlelight",
             ContextMenuStrip = menu,
             Visible = true,
         };
@@ -74,7 +75,7 @@ internal sealed class AppContext : ApplicationContext
         _ = ServeAsync();
         if (!hidden)
             Show();
-        Log("Started 0.2.9. UI and renderer have independent lifetimes. Settings=" + store.Path);
+        Log("Started 0.3.0. UI and renderer have independent lifetimes. Settings=" + store.Path);
         try
         {
             AssistiveTechnology.Notify(true);
@@ -218,7 +219,7 @@ internal sealed class AppContext : ApplicationContext
         }
         return new
         {
-            version = "0.2.9",
+            version = "0.3.0",
             windowVisible = _window.Visible,
             error = _controller.Error,
             secureDesktopError = _controller.SecureDesktopError,

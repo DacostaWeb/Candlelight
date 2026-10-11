@@ -2,6 +2,12 @@ namespace Candlelight.Next;
 
 internal sealed class DarkComboBox : ComboBox
 {
+    protected override void OnDpiChangedAfterParent(EventArgs e)
+    {
+        base.OnDpiChangedAfterParent(e);
+        ItemHeight = Math.Max((int)(24 * DeviceDpi / 96f), Font.Height + 6);
+    }
+
     public DarkComboBox() =>
         SetStyle(
             ControlStyles.UserPaint

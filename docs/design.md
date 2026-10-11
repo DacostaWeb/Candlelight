@@ -1,5 +1,13 @@
 # Candlelight interface
 
+Version 0.3 puts the daily graph first: a monitor strip, temperature/brightness
+curves, shared timing, one global transition duration and a selected-point editor.
+The sun markers show the chosen location's actual calculated day. The layout has
+been rendered and checked at 150% DPI, at full and compact widths. See
+[the design plan and critique](schedule-design.md) and [the schedule guide](schedules.md).
+
+The notes below document the earlier layouts.
+
 A quiet, readable Windows control panel for adjusting light at night. The monitor
 rail stays visible while the selected monitor's settings scroll independently.
 Presets are immediately below monitor selection; manual values combine sliders

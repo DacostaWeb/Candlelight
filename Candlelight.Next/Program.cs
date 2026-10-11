@@ -107,7 +107,7 @@ internal static class Program
             return Preview(preview);
         using var mutex = new Mutex(true, AppContext.PipeName + ".Instance", out var first);
         if (!first)
-            return SendCommand(new("show"), null);
+            return SendCommand(new(args.Contains("--hidden") ? "status" : "show"), null);
         try
         {
             var path =
@@ -185,13 +185,21 @@ internal static class Program
         store.Update(settings =>
         {
             settings.SelectedMonitor = "preview-internal";
-            var monitor = settings.Monitors[0];
-            monitor.Schedule =
-            [
-                new(new(20, 0), new(Candlelight.Engine.ColorMode.Temperature, 3500, 1), 30),
-                new(new(22, 0), new(Candlelight.Engine.ColorMode.Temperature, 2700, 1), 15),
-                new(new(0, 0), new(Candlelight.Engine.ColorMode.PureRed, 500, 0.15)),
-            ];
+            settings.Timing.Location = new("Póvoa de Varzim", 41.38215, -8.75776, "Europe/Lisbon");
+            foreach (var monitor in settings.Monitors)
+            {
+                monitor.Scheduled = true;
+                foreach (var point in settings.Timing.Points)
+                    monitor.PointColors[point.Id] = new(
+                        point.Time.Hour >= 22 && monitor.Id == "preview-oled"
+                            ? Candlelight.Engine.ColorMode.PureRed
+                            : Candlelight.Engine.ColorMode.Temperature,
+                        point.Time.Hour >= 22 ? 500
+                            : point.Time.Hour == 11 ? 6600
+                            : 2700,
+                        monitor.Id == "preview-oled" ? .15 : 1
+                    );
+            }
         });
         var exit = 0;
         using var form = new ControlWindow(store, null, displays);
@@ -200,7 +208,16 @@ internal static class Program
         {
             try
             {
+                var fixture = store.Read();
                 form.VerifyPreviewControls();
+                store.Update(s =>
+                {
+                    s.Timing = fixture.Timing;
+                    s.Monitors = fixture.Monitors;
+                    s.FilterCursor = fixture.FilterCursor;
+                });
+                form.Reload();
+                form.PreparePreview(false);
                 await Task.Delay(250);
                 File.WriteAllText(
                     Path.Combine(directory, "layout.txt"),
@@ -219,9 +236,78 @@ internal static class Program
                     Path.Combine(directory, "controls.png"),
                     System.Drawing.Imaging.ImageFormat.Png
                 );
+                form.PreparePreview(true, true);
+                using (var brightness = new Bitmap(form.Width, form.Height))
+                {
+                    form.DrawToBitmap(brightness, new(0, 0, brightness.Width, brightness.Height));
+                    brightness.Save(
+                        Path.Combine(directory, "brightness.png"),
+                        System.Drawing.Imaging.ImageFormat.Png
+                    );
+                }
+                form.MinimumSize = new(0, 0);
+                form.ClientSize = new(
+                    (int)(900 * form.DeviceDpi / 96f),
+                    Math.Min(form.ClientSize.Height, (int)(650 * form.DeviceDpi / 96f))
+                );
+                form.PreparePreview(false);
+                using (var compact = new Bitmap(form.Width, form.Height))
+                {
+                    form.DrawToBitmap(compact, new(0, 0, compact.Width, compact.Height));
+                    compact.Save(
+                        Path.Combine(directory, "compact.png"),
+                        System.Drawing.Imaging.ImageFormat.Png
+                    );
+                }
+                foreach (
+                    var control in Walk(form)
+                        .Where(c =>
+                            c.Visible && c is Button or CheckBox or ComboBox or NumericUpDown
+                        )
+                )
+                {
+                    var bounds = form.RectangleToClient(
+                        control.RectangleToScreen(control.ClientRectangle)
+                    );
+                    if (!form.ClientRectangle.Contains(bounds))
+                        throw new InvalidOperationException(
+                            "Clipped control at compact size: " + control.Text
+                        );
+                }
+                using (var location = new LocationDialog(fixture.Timing.Location))
+                {
+                    location.Show(form);
+                    await Task.Delay(100);
+                    foreach (
+                        var control in Walk(location)
+                            .Where(c =>
+                                c.Visible && c is Button or ComboBox or NumericUpDown or TextBox
+                            )
+                    )
+                        if (
+                            !location.ClientRectangle.Contains(
+                                location.RectangleToClient(
+                                    control.RectangleToScreen(control.ClientRectangle)
+                                )
+                            )
+                        )
+                            throw new InvalidOperationException(
+                                "Clipped location control: " + control.Text
+                            );
+                    using var locationImage = new Bitmap(location.Width, location.Height);
+                    location.DrawToBitmap(
+                        locationImage,
+                        new(0, 0, locationImage.Width, locationImage.Height)
+                    );
+                    locationImage.Save(
+                        Path.Combine(directory, "location.png"),
+                        System.Drawing.Imaging.ImageFormat.Png
+                    );
+                    location.VerifyPreviewControls();
+                }
                 File.WriteAllText(
                     Path.Combine(directory, "verification.txt"),
-                    "PASS: compiled control window, 4000/2700 K edits, exact red preset, per-monitor isolation, schedule enable, cursor option. No real renderer started."
+                    "PASS: graph edits, shared hours with independent colors, global transitions, undo, detach/rejoin, solar anchor/offset, brightness, manual red, schedule resume, cursor option. No real renderer started."
                 );
             }
             catch (Exception error)

@@ -61,6 +61,9 @@ public sealed record MonitorProfile
     public ColorProfile Manual { get; set; } = new(ColorMode.Temperature, 2700, 1);
     public bool Scheduled { get; set; }
     public List<SchedulePoint> Schedule { get; set; } = [];
+    public bool UseSharedSchedule { get; set; } = true;
+    public List<TimingPoint> OwnTiming { get; set; } = [];
+    public Dictionary<string, ColorProfile> PointColors { get; set; } = [];
 
     public ColorProfile Evaluate(TimeOnly time) =>
         Scheduled && Schedule.Count > 0 ? DailySchedule.Evaluate(Schedule, time) : Manual;

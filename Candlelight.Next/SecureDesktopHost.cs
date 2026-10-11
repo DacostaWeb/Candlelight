@@ -85,9 +85,7 @@ internal static class SecureDesktopHost
             engine.Ready.GetAwaiter().GetResult();
             engine
                 .ApplyProfilesAsync(
-                    profiles.Select(p =>
-                        (p.Id, p.Evaluate(TimeOnly.FromDateTime(DateTime.Now)), p.Enabled)
-                    )
+                    profiles.Select(p => (p.Id, p.EvaluateAt(DateTimeOffset.Now), p.Enabled))
                 )
                 .GetAwaiter()
                 .GetResult();
@@ -108,18 +106,28 @@ internal static class SecureDesktopHost
             var rendererReadyMilliseconds = startup.ElapsedMilliseconds;
             var desktop = InputDesktop.ThreadName;
             bool? previouslyActive = null;
+            var lastProfileRead = Environment.TickCount64;
             EngineSnapshot? last = prepared;
             do
             {
                 var active = InputDesktop.IsActive(desktop);
-                if (active && previouslyActive == false)
+                if (
+                    active
+                    && (
+                        previouslyActive == false
+                        || Environment.TickCount64 - lastProfileRead >= 10000
+                    )
+                )
+                {
                     profiles = SecureDesktopProfiles.Read();
+                    lastProfileRead = Environment.TickCount64;
+                }
                 if (active)
                 {
-                    var now = TimeOnly.FromDateTime(DateTime.Now);
+                    var now = DateTimeOffset.Now;
                     engine
                         .ApplyProfilesAsync(
-                            profiles.Select(p => (p.Id, p.Evaluate(now), p.Enabled))
+                            profiles.Select(p => (p.Id, p.EvaluateAt(now), p.Enabled))
                         )
                         .GetAwaiter()
                         .GetResult();

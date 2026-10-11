@@ -1,4 +1,4 @@
-# Candlelight 0.2: essential controls and a new renderer
+# Candlelight 0.3: visual schedules and independent monitor colors
 
 <p><img src="../favicon.png" width="64" height="64" alt="Candlelight candle icon" /></p>
 
@@ -18,16 +18,20 @@ handover, gamma ramps, private color-system exports or Night Light writes.
 - An explicit **Vermelho puro** mode. It preserves red and sets green/blue
   to exact zero; purely blue/green objects become black.
 - Four quick presets, named saved presets and a tray menu.
-- Daily time points with per-point transition durations. A later point bounds
-  the preceding transition. Entering/leaving red-only mode switches immediately
-  so a requested red-only period never fades through green/blue.
+- A draggable daily graph for temperature and brightness, shared timing with
+  independent per-monitor colors, copy/detach actions, keyboard editing and undo.
+- One global transition duration, with smooth or linear interpolation. A later
+  point bounds the preceding transition. Entering/leaving red-only mode switches
+  immediately so a requested red-only period never fades through green/blue.
+- Offline daily sunrise/sunset calculation using the chosen city's coordinates
+  and time zone. Points can use clock time or solar events with offsets. A city
+  search uses Open-Meteo/GeoNames only when requested. See [the schedule guide](schedules.md).
 - Closing the control window hides it. **Sair** in the tray exits the renderer.
   Rendering and schedule evaluation run independently of that window.
 - **Filtrar ponteiro** colors standard Windows cursors without mouse trails.
   Turning it off, pausing the filter or exiting restores the original cursors.
 
-The first version omits location, sunrise/sunset, application exceptions,
-theme settings and the original updater.
+Application exceptions, theme settings and the original updater remain omitted.
 
 ## Renderer
 

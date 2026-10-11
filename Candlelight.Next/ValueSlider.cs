@@ -36,6 +36,7 @@ internal sealed class ValueSlider : Control
         }
     }
     public event EventHandler? ValueChanged;
+    public event EventHandler? InteractionCompleted;
 
     public ValueSlider()
     {
@@ -90,6 +91,7 @@ internal sealed class ValueSlider : Control
     {
         base.OnMouseUp(e);
         Capture = false;
+        InteractionCompleted?.Invoke(this, EventArgs.Empty);
     }
 
     private void SetFromX(int x)

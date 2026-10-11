@@ -1,5 +1,14 @@
 # Protected desktop prototype (0.2.9)
 
+The 0.3.0 schedule update retains this rendering and lifetime mechanism. It adds
+validated dated color events (schema 2, with schema-1 reading compatibility) so
+the ordinary and protected desktops evaluate the same global transitions and
+resolved solar times. Event count, ordering, profiles and total payload size are
+bounded. The secure process receives no location/network capability. See
+[schedule evaluation and migration](schedules.md). The handoff observations
+below describe the physical 0.2.9 tests; schedule changes do not establish new
+physical wake or first-frame guarantees.
+
 Windows can launch registered assistive technology on the UAC/logon desktop.
 The ordinary UIAccess process is insufficient. This prototype registers
 `Candlelight_ColorFilter_v1`, with the alternate

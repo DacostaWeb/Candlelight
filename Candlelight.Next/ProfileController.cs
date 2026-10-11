@@ -57,7 +57,7 @@ internal sealed class ProfileController : IDisposable
         try
         {
             _store.EnsureDisplays(DisplayCatalog.GetDisplays());
-            var now = TimeOnly.FromDateTime(DateTime.Now);
+            var now = DateTimeOffset.Now;
             var settings = _store.Read();
             try
             {
@@ -66,7 +66,8 @@ internal sealed class ProfileController : IDisposable
                         m.Id,
                         m.Enabled,
                         m.Manual,
-                        m.Scheduled ? m.Schedule.ToArray() : []
+                        [],
+                        ScheduleTimeline.ForTransfer(settings.Timing, m, now)
                     ))
                 );
                 if (
@@ -95,7 +96,10 @@ internal sealed class ProfileController : IDisposable
             var changes = settings
                 .Monitors.Select(monitor =>
                 {
-                    var target = (monitor.Evaluate(now), monitor.Enabled);
+                    var target = (
+                        ScheduleTimeline.Evaluate(settings.Timing, monitor, now),
+                        monitor.Enabled
+                    );
                     return (DisplayId: monitor.Id, Profile: target.Item1, target.Enabled);
                 })
                 .Where(p =>

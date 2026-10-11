@@ -9,11 +9,17 @@ public sealed record SecureMonitorProfile(
     string Id,
     bool Enabled,
     ColorProfile Manual,
-    SchedulePoint[] Schedule
+    SchedulePoint[] Schedule,
+    ScheduledColorEvent[]? Events = null
 )
 {
     public ColorProfile Evaluate(TimeOnly time) =>
         Schedule.Length == 0 ? Manual : DailySchedule.Evaluate(Schedule, time);
+
+    public ColorProfile EvaluateAt(DateTimeOffset time) =>
+        Events is { Length: > 0 }
+            ? ScheduleTimeline.Evaluate(Events, time, Manual)
+            : Evaluate(TimeOnly.FromDateTime(time.LocalDateTime));
 }
 
 /// <summary>Only bounded color data crosses into the secure desktop. No file paths or commands.</summary>
@@ -37,7 +43,7 @@ public static class SecureDesktopProfiles
     {
         var monitors = profiles.ToArray();
         Validate(monitors);
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(new Payload(1, monitors), Json);
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(new Payload(2, monitors), Json);
         if (bytes.Length > MaximumBytes)
             throw new InvalidDataException("Secure profiles exceed their size limit.");
         return bytes;
@@ -48,7 +54,7 @@ public static class SecureDesktopProfiles
         if (bytes.Length is < 1 or > MaximumBytes)
             throw new InvalidDataException("Invalid secure profile length.");
         var payload = JsonSerializer.Deserialize<Payload>(bytes, Json);
-        if (payload is null || payload.Schema != 1)
+        if (payload is null || payload.Schema is not (1 or 2))
             throw new InvalidDataException("Unsupported secure profile schema.");
         Validate(payload.Monitors);
         return payload.Monitors;
@@ -70,6 +76,23 @@ public static class SecureDesktopProfiles
             )
                 throw new InvalidDataException("Invalid or duplicate monitor identity.");
             CheckColor(monitor.Manual);
+            if (monitor.Events is { } events)
+            {
+                if (events.Length > 240)
+                    throw new InvalidDataException("Invalid dated schedule length.");
+                DateTimeOffset? previous = null;
+                foreach (var item in events)
+                {
+                    if (
+                        item is null
+                        || item.TransitionMinutes is < 0 or > 1440
+                        || previous is not null && item.Time <= previous
+                    )
+                        throw new InvalidDataException("Invalid dated schedule event.");
+                    CheckColor(item.Profile);
+                    previous = item.Time;
+                }
+            }
             if (monitor.Schedule is null || monitor.Schedule.Length > 48)
                 throw new InvalidDataException("Invalid schedule length.");
             foreach (var point in monitor.Schedule)
