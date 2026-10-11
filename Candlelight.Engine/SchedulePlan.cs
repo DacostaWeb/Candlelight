@@ -11,7 +11,9 @@ public sealed record TimingPoint(
     string Id,
     TimeOnly Time,
     TimeAnchor Anchor = TimeAnchor.Clock,
-    int OffsetMinutes = 0
+    int OffsetMinutes = 0,
+    int? TransitionMinutes = null,
+    TransitionCurve? Curve = null
 );
 
 public sealed record SchedulePlan
@@ -57,6 +59,12 @@ public sealed record SchedulePlan
                 .Count() != points.Count
         )
             throw new ArgumentException("Já existe um ponto nessa hora.");
+        foreach (var point in points)
+        {
+            if (point.TransitionMinutes is < 0 or > 1440)
+                throw new ArgumentException("A transição deve ter entre 0 e 1440 minutos.");
+            point.Curve?.Validate();
+        }
     }
 }
 
@@ -66,7 +74,8 @@ public sealed record ScheduledColorEvent(
     DateTimeOffset Time,
     ColorProfile Profile,
     int TransitionMinutes,
-    bool Smooth
+    bool Smooth,
+    TransitionCurve? Curve = null
 );
 
 public static class ScheduleTimeline
@@ -125,8 +134,9 @@ public static class ScheduleTimeline
             .Select(p => new ScheduledColorEvent(
                 p.Time,
                 Color(monitor, p.Point),
-                plan.TransitionMinutes,
-                plan.SmoothTransitions
+                p.Point.TransitionMinutes ?? plan.TransitionMinutes,
+                plan.SmoothTransitions,
+                p.Point.Curve
             ))
             .ToArray();
     }
@@ -165,15 +175,26 @@ public static class ScheduleTimeline
             index + 1 < events.Count ? (events[index + 1].Time - current.Time).TotalMinutes : 1440
         );
         var elapsed = (now - current.Time).TotalMinutes;
-        if (duration <= 0 || elapsed >= duration || previous.Profile.Mode != current.Profile.Mode)
+        if (
+            duration <= 0
+            || elapsed >= duration
+            || (previous.Profile.Mode != current.Profile.Mode && current.Curve is null)
+        )
             return current.Profile;
         var t = Math.Clamp(elapsed / duration, 0, 1);
-        if (current.Smooth)
+        if (current.Curve is { } curve)
+            t = curve.Evaluate(t);
+        else if (current.Smooth)
             t = t * t * (3 - 2 * t);
+        var previousTemperature =
+            previous.Profile.Mode == ColorMode.PureRed ? 500 : previous.Profile.Temperature;
+        var currentTemperature =
+            current.Profile.Mode == ColorMode.PureRed ? 500 : current.Profile.Temperature;
         return new(
-            current.Profile.Mode,
-            previous.Profile.Temperature
-                + (current.Profile.Temperature - previous.Profile.Temperature) * t,
+            previous.Profile.Mode == current.Profile.Mode
+                ? current.Profile.Mode
+                : ColorMode.Temperature,
+            previousTemperature + (currentTemperature - previousTemperature) * t,
             previous.Profile.Brightness
                 + (current.Profile.Brightness - previous.Profile.Brightness) * t
         );

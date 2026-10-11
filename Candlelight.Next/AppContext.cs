@@ -59,6 +59,7 @@ internal sealed class AppContext : ApplicationContext
         foreach (var preset in new AppSettings().Presets)
             menu.Items.Add(preset.Name, null, (_, _) => _window.ApplyPreset(preset.Profile));
         menu.Items.Add("Retomar horário", null, (_, _) => _window.ResumeSchedule());
+        menu.Items.Add("Descartar ajustes de hoje", null, (_, _) => _window.RestoreProgram());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Sair", null, (_, _) => ExitThread());
         _tray = new()
@@ -75,7 +76,7 @@ internal sealed class AppContext : ApplicationContext
         _ = ServeAsync();
         if (!hidden)
             Show();
-        Log("Started 0.3.0. UI and renderer have independent lifetimes. Settings=" + store.Path);
+        Log("Started 0.4.0. UI and renderer have independent lifetimes. Settings=" + store.Path);
         try
         {
             AssistiveTechnology.Notify(true);
@@ -175,29 +176,51 @@ internal sealed class AppContext : ApplicationContext
                 _window.Hide();
                 break;
             case "set":
-                _store.Update(settings =>
-                {
-                    var id = request.Monitor ?? settings.SelectedMonitor ?? settings.Monitors[0].Id;
-                    var monitor = settings.Monitors.Single(m => m.Id == id);
-                    monitor.Manual = new ColorProfile(
-                        request.Red ? ColorMode.PureRed : ColorMode.Temperature,
-                        request.Temperature,
-                        request.Brightness
-                    ).Validate();
-                    monitor.Scheduled = false;
-                    monitor.Enabled = true;
-                });
+                _store.Update(saved =>
+                    ScheduleSession.EditToday(
+                        saved,
+                        DateTimeOffset.Now,
+                        settings =>
+                        {
+                            var id =
+                                request.Monitor
+                                ?? settings.SelectedMonitor
+                                ?? settings.Monitors[0].Id;
+                            var monitor = settings.Monitors.Single(m => m.Id == id);
+                            monitor.Manual = new ColorProfile(
+                                request.Red ? ColorMode.PureRed : ColorMode.Temperature,
+                                request.Temperature,
+                                request.Brightness
+                            ).Validate();
+                            monitor.Scheduled = false;
+                            monitor.Enabled = true;
+                        }
+                    )
+                );
                 await _controller.ApplyNowAsync();
                 _window.Reload();
                 break;
             case "pause":
-                _store.Update(settings =>
-                {
-                    var id = request.Monitor ?? settings.SelectedMonitor ?? settings.Monitors[0].Id;
-                    settings.Monitors.Single(m => m.Id == id).Enabled = false;
-                });
+                _store.Update(saved =>
+                    ScheduleSession.EditToday(
+                        saved,
+                        DateTimeOffset.Now,
+                        settings =>
+                        {
+                            var id =
+                                request.Monitor
+                                ?? settings.SelectedMonitor
+                                ?? settings.Monitors[0].Id;
+                            settings.Monitors.Single(m => m.Id == id).Enabled = false;
+                        }
+                    )
+                );
                 await _controller.ApplyNowAsync();
                 _window.Reload();
+                break;
+            case "restore-program":
+                _window.RestoreProgram();
+                await _controller.ApplyNowAsync();
                 break;
             case "status":
             case "stop":
@@ -219,7 +242,7 @@ internal sealed class AppContext : ApplicationContext
         }
         return new
         {
-            version = "0.3.0",
+            version = "0.4.0",
             windowVisible = _window.Visible,
             error = _controller.Error,
             secureDesktopError = _controller.SecureDesktopError,

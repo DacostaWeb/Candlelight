@@ -27,6 +27,7 @@ internal sealed class ScheduleGraph : Control
     internal event Action<TimeOnly, double>? PointAdded;
     internal event Action<string>? PointRemoved;
     internal event Action? EditRequested;
+    internal event Action? CurveRequested;
 
     public ScheduleGraph()
     {
@@ -221,6 +222,18 @@ internal sealed class ScheduleGraph : Control
             g.DrawEllipse(outline, pos.X - radius, pos.Y - radius, radius * 2, radius * 2);
             if (selected)
             {
+                var duration = node.Point.TransitionMinutes ?? _plan.TransitionMinutes;
+                var endMinute = LocalMinute(node.Time) + duration;
+                if (duration > 0 && endMinute < 1440)
+                {
+                    using var durationPen = new Pen(Color.FromArgb(130, color), UiScale)
+                    {
+                        DashStyle = DashStyle.Dash,
+                    };
+                    var end = new PointF(X(endMinute), pos.Y);
+                    g.DrawLine(durationPen, pos, end);
+                    g.DrawLine(durationPen, end.X, end.Y - 5 * UiScale, end.X, end.Y + 5 * UiScale);
+                }
                 var label =
                     profile.Mode == ColorMode.PureRed && !_brightness ? "Vermelho"
                     : _brightness ? $"{profile.Brightness:P0}"
@@ -466,7 +479,37 @@ internal sealed class ScheduleGraph : Control
     protected override void OnMouseDoubleClick(MouseEventArgs e)
     {
         base.OnMouseDoubleClick(e);
-        if (e.Button == MouseButtons.Left && Plot.Contains(e.Location) && Hit(e.Location) is null)
+        if (e.Button != MouseButtons.Left || !Plot.Contains(e.Location))
+            return;
+        var hit = Hit(e.Location);
+        if (hit is not null)
+        {
+            CancelDrag();
+            _selected = hit.Point.Id;
+            PointSelected?.Invoke(_selected);
+            CurveRequested?.Invoke();
+            return;
+        }
+        var instant = Instant(Minute(e.X));
+        var transition = _nodes.LastOrDefault(n =>
+            n.Time <= instant
+            && instant <= n.Time.AddMinutes(n.Point.TransitionMinutes ?? _plan.TransitionMinutes)
+        );
+        if (
+            transition is not null
+            && _monitor is not null
+            && Math.Abs(
+                e.Y - Y(Amount(ScheduleTimeline.Evaluate(_events, instant, _monitor.Manual)))
+            )
+                < 18 * UiScale
+        )
+        {
+            _selected = transition.Point.Id;
+            PointSelected?.Invoke(_selected);
+            CurveRequested?.Invoke();
+            return;
+        }
+        if (Hit(e.Location) is null)
             PointAdded?.Invoke(
                 TimeOnly.FromTimeSpan(
                     TimeSpan.FromMinutes(Math.Clamp((int)Math.Round(Minute(e.X) / 5) * 5, 0, 1439))

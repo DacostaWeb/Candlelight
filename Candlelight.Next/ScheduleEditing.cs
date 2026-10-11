@@ -6,6 +6,39 @@ namespace Candlelight.Next;
 
 internal static class ScheduleEditing
 {
+    internal static void ApplySolarCycle(
+        AppSettings settings,
+        string monitorId,
+        TimingPoint morning,
+        TimingPoint evening
+    )
+    {
+        if (settings.Timing.Location is null)
+            throw new ArgumentException("Escolhe uma cidade antes de criar o ciclo solar.");
+        var monitor = Monitor(settings, monitorId);
+        var targets = monitor.UseSharedSchedule
+            ? settings.Monitors.Where(m => m.UseSharedSchedule).ToArray()
+            : [monitor];
+        foreach (var target in targets)
+        {
+            var colors = ScheduleTimeline
+                .Points(settings.Timing, target)
+                .Select(p => ScheduleTimeline.Color(target, p))
+                .DefaultIfEmpty(target.Manual)
+                .ToArray();
+            var ordered = colors
+                .OrderBy(c => c.Mode == ColorMode.PureRed ? 500 : c.Temperature)
+                .ThenBy(c => c.Brightness)
+                .ToArray();
+            target.PointColors = new() { [morning.Id] = ordered[^1], [evening.Id] = ordered[0] };
+            target.Scheduled = true;
+        }
+        if (monitor.UseSharedSchedule)
+            settings.Timing.Points = [morning, evening];
+        else
+            monitor.OwnTiming = [morning, evening];
+    }
+
     internal static MonitorProfile Monitor(AppSettings settings, string id) =>
         settings.Monitors.Single(m => m.Id == id);
 
@@ -37,6 +70,28 @@ internal static class ScheduleEditing
         var points = monitor.UseSharedSchedule ? settings.Timing.Points : monitor.OwnTiming;
         var point = new TimingPoint(Guid.NewGuid().ToString("N"), time);
         var instant = SolarTimes.AtLocalTime(date, time, settings.Timing.TimeZone);
+        if (
+            settings.Timing.Location is { } location
+            && points.Count > 0
+            && points.All(p => p.Anchor != TimeAnchor.Clock)
+        )
+        {
+            var sun = SolarTimes.Calculate(date, location);
+            var closest = new[]
+            {
+                (TimeAnchor.Sunrise, sun.Sunrise),
+                (TimeAnchor.Sunset, sun.Sunset),
+            }
+                .Where(p => p.Item2 is not null)
+                .OrderBy(p => Math.Abs((instant - p.Item2!.Value).TotalMinutes))
+                .FirstOrDefault();
+            if (closest.Item2 is { } solar && Math.Abs((instant - solar).TotalMinutes) <= 720)
+                point = point with
+                {
+                    Anchor = closest.Item1,
+                    OffsetMinutes = (int)Math.Round((instant - solar).TotalMinutes),
+                };
+        }
         var targets = monitor.UseSharedSchedule
             ? settings.Monitors.Where(m => m.UseSharedSchedule).ToArray()
             : [monitor];
@@ -94,11 +149,15 @@ internal static class ScheduleEditing
             monitor.PointColors = nodes.ToDictionary(
                 p => p.Point.Id,
                 p =>
-                    ScheduleTimeline.Evaluate(
-                        settings.Timing,
-                        source,
-                        p.Time.AddMinutes(settings.Timing.TransitionMinutes)
-                    )
+                    source.PointColors.TryGetValue(p.Point.Id, out var color)
+                        ? color
+                        : ScheduleTimeline.Evaluate(
+                            settings.Timing,
+                            source,
+                            p.Time.AddMinutes(
+                                p.Point.TransitionMinutes ?? settings.Timing.TransitionMinutes
+                            )
+                        )
             );
             monitor.OwnTiming = [];
         }
@@ -126,7 +185,9 @@ internal static class ScheduleEditing
                         {
                             Scheduled = true,
                         },
-                        p.Time.AddMinutes(settings.Timing.TransitionMinutes)
+                        p.Time.AddMinutes(
+                            p.Point.TransitionMinutes ?? settings.Timing.TransitionMinutes
+                        )
                     )
         );
     }

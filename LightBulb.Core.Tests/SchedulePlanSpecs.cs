@@ -243,7 +243,7 @@ public class SchedulePlanSpecs
             var original = File.ReadAllText(path);
             var store = new ProfileStore(path);
             var migrated = store.Read();
-            migrated.Schema.Should().Be(2);
+            migrated.Schema.Should().Be(3);
             migrated.Timing.TransitionMinutes.Should().Be(15);
             migrated
                 .Timing.Points.Select(p => p.Time)

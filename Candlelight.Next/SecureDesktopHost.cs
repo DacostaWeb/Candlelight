@@ -83,9 +83,12 @@ internal static class SecureDesktopHost
                 keepInactiveLocalSurfaces: true
             );
             engine.Ready.GetAwaiter().GetResult();
+            var initialTime = DateTimeOffset.Now;
             engine
                 .ApplyProfilesAsync(
-                    profiles.Select(p => (p.Id, p.EvaluateAt(DateTimeOffset.Now), p.Enabled))
+                    profiles.Select(p =>
+                        (p.Id, p.EvaluateAt(initialTime), p.EnabledAt(initialTime))
+                    )
                 )
                 .GetAwaiter()
                 .GetResult();
@@ -127,7 +130,7 @@ internal static class SecureDesktopHost
                     var now = DateTimeOffset.Now;
                     engine
                         .ApplyProfilesAsync(
-                            profiles.Select(p => (p.Id, p.EvaluateAt(now), p.Enabled))
+                            profiles.Select(p => (p.Id, p.EvaluateAt(now), p.EnabledAt(now)))
                         )
                         .GetAwaiter()
                         .GetResult();

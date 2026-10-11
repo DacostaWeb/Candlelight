@@ -5,21 +5,37 @@ using Microsoft.Win32.SafeHandles;
 
 namespace Candlelight.Engine;
 
+public sealed record SecureScheduleOverride(
+    DateTimeOffset StartsAt,
+    DateTimeOffset ExpiresAt,
+    bool Enabled,
+    ColorProfile Manual,
+    ScheduledColorEvent[] Events
+)
+{
+    public bool ActiveAt(DateTimeOffset time) => time >= StartsAt && time < ExpiresAt;
+}
+
 public sealed record SecureMonitorProfile(
     string Id,
     bool Enabled,
     ColorProfile Manual,
     SchedulePoint[] Schedule,
-    ScheduledColorEvent[]? Events = null
+    ScheduledColorEvent[]? Events = null,
+    SecureScheduleOverride? Today = null
 )
 {
     public ColorProfile Evaluate(TimeOnly time) =>
         Schedule.Length == 0 ? Manual : DailySchedule.Evaluate(Schedule, time);
 
     public ColorProfile EvaluateAt(DateTimeOffset time) =>
-        Events is { Length: > 0 }
-            ? ScheduleTimeline.Evaluate(Events, time, Manual)
-            : Evaluate(TimeOnly.FromDateTime(time.LocalDateTime));
+        Today is { } today && today.ActiveAt(time)
+            ? ScheduleTimeline.Evaluate(today.Events, time, today.Manual)
+        : Events is { Length: > 0 } ? ScheduleTimeline.Evaluate(Events, time, Manual)
+        : Evaluate(TimeOnly.FromDateTime(time.LocalDateTime));
+
+    public bool EnabledAt(DateTimeOffset time) =>
+        Today is { } today && today.ActiveAt(time) ? today.Enabled : Enabled;
 }
 
 /// <summary>Only bounded color data crosses into the secure desktop. No file paths or commands.</summary>
@@ -35,7 +51,7 @@ public static class SecureDesktopProfiles
 
     private static readonly JsonSerializerOptions Json = new()
     {
-        MaxDepth = 8,
+        MaxDepth = 10,
         UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow,
     };
 
@@ -43,7 +59,7 @@ public static class SecureDesktopProfiles
     {
         var monitors = profiles.ToArray();
         Validate(monitors);
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(new Payload(2, monitors), Json);
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(new Payload(3, monitors), Json);
         if (bytes.Length > MaximumBytes)
             throw new InvalidDataException("Secure profiles exceed their size limit.");
         return bytes;
@@ -54,7 +70,7 @@ public static class SecureDesktopProfiles
         if (bytes.Length is < 1 or > MaximumBytes)
             throw new InvalidDataException("Invalid secure profile length.");
         var payload = JsonSerializer.Deserialize<Payload>(bytes, Json);
-        if (payload is null || payload.Schema is not (1 or 2))
+        if (payload is null || payload.Schema is not (1 or 2 or 3))
             throw new InvalidDataException("Unsupported secure profile schema.");
         Validate(payload.Monitors);
         return payload.Monitors;
@@ -76,22 +92,17 @@ public static class SecureDesktopProfiles
             )
                 throw new InvalidDataException("Invalid or duplicate monitor identity.");
             CheckColor(monitor.Manual);
-            if (monitor.Events is { } events)
+            CheckEvents(monitor.Events);
+            if (monitor.Today is { } today)
             {
-                if (events.Length > 240)
-                    throw new InvalidDataException("Invalid dated schedule length.");
-                DateTimeOffset? previous = null;
-                foreach (var item in events)
-                {
-                    if (
-                        item is null
-                        || item.TransitionMinutes is < 0 or > 1440
-                        || previous is not null && item.Time <= previous
-                    )
-                        throw new InvalidDataException("Invalid dated schedule event.");
-                    CheckColor(item.Profile);
-                    previous = item.Time;
-                }
+                if (
+                    today.ExpiresAt <= today.StartsAt
+                    || today.ExpiresAt - today.StartsAt > TimeSpan.FromHours(26)
+                    || today.Events is null
+                )
+                    throw new InvalidDataException("Invalid temporary schedule lifetime.");
+                CheckColor(today.Manual);
+                CheckEvents(today.Events);
             }
             if (monitor.Schedule is null || monitor.Schedule.Length > 48)
                 throw new InvalidDataException("Invalid schedule length.");
@@ -103,6 +114,27 @@ public static class SecureDesktopProfiles
             }
             if (monitor.Schedule.Length != 0)
                 DailySchedule.Evaluate(monitor.Schedule, TimeOnly.MinValue);
+        }
+    }
+
+    private static void CheckEvents(ScheduledColorEvent[]? events)
+    {
+        if (events is null)
+            return;
+        if (events.Length > 240)
+            throw new InvalidDataException("Invalid dated schedule length.");
+        DateTimeOffset? previous = null;
+        foreach (var item in events)
+        {
+            if (
+                item is null
+                || item.TransitionMinutes is < 0 or > 1440
+                || previous is not null && item.Time <= previous
+            )
+                throw new InvalidDataException("Invalid dated schedule event.");
+            CheckColor(item.Profile);
+            item.Curve?.Validate();
+            previous = item.Time;
         }
     }
 

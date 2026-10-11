@@ -4,7 +4,7 @@ using Candlelight.Engine;
 
 namespace Candlelight.Next;
 
-internal sealed class ControlWindow : Form
+internal sealed partial class ControlWindow : Form
 {
     internal static readonly Color Surface = LightTheme.Background;
     internal static readonly Color TextColor = LightTheme.Text;
@@ -150,9 +150,9 @@ internal sealed class ControlWindow : Form
             Dock = DockStyle.Fill,
             Padding = new(28, 16, 28, 12),
             ColumnCount = 1,
-            RowCount = 8,
+            RowCount = 9,
         };
-        foreach (var height in new[] { 48, 54, 36, -1, 42, 174, 34, 24 })
+        foreach (var height in new[] { 48, 54, 38, 36, -1, 42, 174, 34, 24 })
             root.RowStyles.Add(
                 new(height < 0 ? SizeType.Percent : SizeType.Absolute, height < 0 ? 100 : height)
             );
@@ -187,6 +187,7 @@ internal sealed class ControlWindow : Form
         root.Controls.Add(header, 0, 0);
         _monitorRow.AutoScroll = true;
         root.Controls.Add(_monitorRow, 0, 1);
+        root.Controls.Add(BuildScopeRow(), 0, 2);
 
         var graphHeader = new TableLayoutPanel
         {
@@ -204,6 +205,9 @@ internal sealed class ControlWindow : Form
         _dateLabel.MinimumSize = new(94, 25);
         _dateLabel.TextAlign = ContentAlignment.MiddleCenter;
         _dateLabel.Margin = new(0, 1, 8, 0);
+        _dateLabel.Cursor = Cursors.Hand;
+        _dateLabel.AccessibleName = "Data do gráfico. Clica para escolher outro dia.";
+        _dateLabel.Click += (_, _) => ChoosePreviewDate();
         titleRow.Controls.Add(_dateLabel);
         titleRow.Controls.Add(LightTheme.Button("›", () => ChangeDate(1)));
         titleRow.Controls.Add(
@@ -241,8 +245,8 @@ internal sealed class ControlWindow : Form
         tabs.Controls.Add(_brightnessTab);
         tabs.Controls.Add(_temperatureTab);
         graphHeader.Controls.Add(tabs, 1, 0);
-        root.Controls.Add(graphHeader, 0, 2);
-        root.Controls.Add(_graph, 0, 3);
+        root.Controls.Add(graphHeader, 0, 3);
+        root.Controls.Add(_graph, 0, 4);
 
         var toolbar = new TableLayoutPanel
         {
@@ -253,22 +257,25 @@ internal sealed class ControlWindow : Form
         toolbar.ColumnStyles.Add(new(SizeType.Percent, 100));
         toolbar.RowCount = 1;
         toolbar.RowStyles.Add(new(SizeType.Percent, 100));
-        toolbar.ColumnStyles.Add(new(SizeType.Absolute, 330));
+        toolbar.ColumnStyles.Add(new(SizeType.Absolute, 295));
         var tools = LightTheme.Row();
+        tools.Controls.Add(LightTheme.Button("Ciclo solar…", EditSolarCycle));
         tools.Controls.Add(LightTheme.Button("+ Ponto", AddPoint));
+        _curveButton = LightTheme.Button("Curva…", EditCurve);
+        tools.Controls.Add(_curveButton);
         tools.Controls.Add(LightTheme.Button("Copiar cores…", CopyColors));
         _undo = LightTheme.Button("Desfazer", Undo);
         _undo.AccessibleDescription = "Desfaz a última alteração. Ctrl+Z.";
         tools.Controls.Add(_undo);
         toolbar.Controls.Add(tools, 0, 0);
         var transitions = LightTheme.Row();
-        transitions.Controls.Add(LightTheme.Label("Transição global"));
+        transitions.Controls.Add(LightTheme.Label("Por defeito"));
         transitions.Controls.Add(_transition);
         transitions.Controls.Add(LightTheme.Label("min"));
         _easing.Items.AddRange(["Suaves", "Lineares"]);
         transitions.Controls.Add(_easing);
         toolbar.Controls.Add(transitions, 1, 0);
-        root.Controls.Add(toolbar, 0, 4);
+        root.Controls.Add(toolbar, 0, 5);
 
         var editor = new TableLayoutPanel
         {
@@ -346,7 +353,7 @@ internal sealed class ControlWindow : Form
         color.Controls.Add(presets, 0, 3);
         color.SetColumnSpan(presets, 4);
         editor.Controls.Add(color, 1, 0);
-        root.Controls.Add(editor, 0, 5);
+        root.Controls.Add(editor, 0, 6);
 
         var footer = new TableLayoutPanel
         {
@@ -365,10 +372,10 @@ internal sealed class ControlWindow : Form
         footer.Controls.Add(solarRow, 0, 0);
         _filterCursor.Anchor = AnchorStyles.Right;
         footer.Controls.Add(_filterCursor, 1, 0);
-        root.Controls.Add(footer, 0, 6);
+        root.Controls.Add(footer, 0, 7);
         _status.Dock = DockStyle.Fill;
         _status.AutoEllipsis = true;
-        root.Controls.Add(_status, 0, 7);
+        root.Controls.Add(_status, 0, 8);
         LightTheme.Style(this);
         WireEvents();
         UpdateDisplays(displays);
@@ -376,6 +383,8 @@ internal sealed class ControlWindow : Form
         AutoScaleDimensions = new(96, 96);
         _clock.Tick += (_, _) =>
         {
+            if (ExpireTemporaryUi())
+                return;
             if (_followingToday && _date != Today())
             {
                 _date = Today();
@@ -383,7 +392,7 @@ internal sealed class ControlWindow : Form
                 return;
             }
             RefreshGraph();
-            UpdateSolar(_store.Read());
+            UpdateSolar(ReadView());
         };
         _clock.Start();
         Shown += (_, _) =>
@@ -441,7 +450,7 @@ internal sealed class ControlWindow : Form
         _filterCursor.CheckedChanged += (_, _) =>
         {
             if (!_loading)
-                Commit(s => s.FilterCursor = _filterCursor.Checked);
+                Commit(s => s.FilterCursor = _filterCursor.Checked, permanent: true);
         };
         _transition.ValueChanged += (_, _) =>
         {
@@ -469,7 +478,7 @@ internal sealed class ControlWindow : Form
             var anchor = (TimeAnchor)_anchor.SelectedIndex;
             if (
                 anchor != TimeAnchor.Clock
-                && _store.Read().Timing.Location is null
+                && ReadView().Timing.Location is null
                 && !ChooseLocation()
             )
             {
@@ -525,6 +534,7 @@ internal sealed class ControlWindow : Form
             RemovePoint();
         };
         _graph.EditRequested += () => _time.Focus();
+        _graph.CurveRequested += EditCurve;
         KeyDown += (_, e) =>
         {
             if (e.Control && e.KeyCode == Keys.Z)
@@ -559,13 +569,18 @@ internal sealed class ControlWindow : Form
     {
         _date = _date.AddDays(amount);
         _followingToday = _date == Today();
+        if (!_followingToday && _todayMode)
+        {
+            _todayMode = false;
+            _history.Clear();
+        }
         Reload();
     }
 
     public void UpdateDisplays(IEnumerable<DisplayDescriptor> displays)
     {
         _displays = displays.ToDictionary(d => d.Id);
-        var settings = _store.Read();
+        var settings = ReadView();
         _selectedMonitor ??= settings.SelectedMonitor;
         if (!settings.Monitors.Any(m => m.Id == _selectedMonitor))
             _selectedMonitor =
@@ -630,7 +645,8 @@ internal sealed class ControlWindow : Form
     {
         if (_selectedMonitor is null)
             return;
-        var settings = _store.Read();
+        var settings = ReadView();
+        UpdateScope();
         var monitor = Current(settings);
         var nodes = ScheduleTimeline.ResolveDay(settings.Timing, monitor, _date);
         if (!nodes.Any(n => n.Point.Id == _selectedPoint))
@@ -671,6 +687,7 @@ internal sealed class ControlWindow : Form
                 _offset.Enabled =
                     !_editingManual && point is not null;
             _remove.Enabled = nodes.Length > 1 && !_editingManual;
+            _curveButton.Enabled = !_editingManual && point is not null;
             _temperature.Value = (decimal)color.Temperature;
             _brightness.Value = (decimal)Math.Round(color.Brightness * 100);
             _temperatureSlider.Value = (int)color.Temperature;
@@ -679,14 +696,14 @@ internal sealed class ControlWindow : Form
             _temperature.Enabled = _temperatureSlider.Enabled = !_red.Checked;
             _editorTitle.Text = _editingManual
                 ? "Ajuste manual deste ecrã"
-                : $"Cor a partir das {point?.Time:HH:mm}";
+                : $"Cor de destino · início {point?.Time:HH:mm}";
             _manual.Visible = !_editingManual;
             _timingHint.Text =
                 _editingManual ? "Escolhe um ponto para voltar ao horário."
                 : point?.UsedFallback == true ? "Sem evento solar: usa a hora fixa deste ponto."
                 : point?.Point.Anchor != TimeAnchor.Clock
                     ? "− antes do sol; + depois. Atualiza todos os dias."
-                : "Os pontos marcam o início da mudança.";
+                : $"Início da mudança · {point?.Point.TransitionMinutes ?? settings.Timing.TransitionMinutes} min";
             _temperatureTab.BackColor = !_brightnessView ? LightTheme.Field : LightTheme.Background;
             _brightnessTab.BackColor = _brightnessView ? LightTheme.Field : LightTheme.Background;
             _temperatureTab.ForeColor = !_brightnessView ? LightTheme.Accent : TextColor;
@@ -715,7 +732,7 @@ internal sealed class ControlWindow : Form
     {
         if (_selectedMonitor is null)
             return;
-        var s = _store.Read();
+        var s = ReadView();
         _graph.SetData(
             s.Timing,
             Current(s),
@@ -744,12 +761,18 @@ internal sealed class ControlWindow : Form
             : $"Nascer {day.Sunrise:HH:mm}   Pôr {day.Sunset:HH:mm}   ·   Calculado para cada dia";
     }
 
-    private bool Commit(Action<AppSettings> edit, bool remember = true)
+    private bool Commit(Action<AppSettings> edit, bool remember = true, bool permanent = false)
     {
         try
         {
             var before = _store.Read();
-            _store.Update(edit);
+            _store.Update(s =>
+            {
+                if (_todayMode && !permanent)
+                    ScheduleSession.EditToday(s, DateTimeOffset.Now, edit);
+                else
+                    edit(s);
+            });
             if (remember)
             {
                 _history.Push(before);
@@ -848,14 +871,14 @@ internal sealed class ControlWindow : Form
             Message("Escreve a hora como 22:30.");
             return;
         }
-        var s = _store.Read();
+        var s = ReadView();
         if (CurrentPoint(s)?.Time != time)
             EditTiming(p => p with { Time = time });
     }
 
     private void AddPoint()
     {
-        var s = _store.Read();
+        var s = ReadView();
         var taken = ScheduleTimeline
             .Points(s.Timing, Current(s))
             .Where(p => p.Anchor == TimeAnchor.Clock)
@@ -915,6 +938,8 @@ internal sealed class ControlWindow : Form
 
     private void Undo()
     {
+        if (ExpireTemporaryUi())
+            return;
         if (_history.Count == 0)
             return;
         var saved = _history.Pop();
@@ -925,15 +950,18 @@ internal sealed class ControlWindow : Form
                 s.Timing = saved.Timing;
                 s.FilterCursor = saved.FilterCursor;
                 s.Presets = saved.Presets;
+                s.Today =
+                    saved.Today is { } today && today.ExpiresAt > DateTimeOffset.Now ? today : null;
             },
-            false
+            false,
+            permanent: true
         );
         Message("Alteração desfeita.");
     }
 
     private void CopyColors()
     {
-        var settings = _store.Read();
+        var settings = ReadView();
         var menu = new ContextMenuStrip { BackColor = LightTheme.Field, ForeColor = TextColor };
         foreach (
             var monitor in settings.Monitors.Where(m =>
@@ -965,7 +993,7 @@ internal sealed class ControlWindow : Form
     private void ShowPresets()
     {
         var menu = new ContextMenuStrip { BackColor = LightTheme.Field, ForeColor = TextColor };
-        foreach (var preset in _store.Read().Presets)
+        foreach (var preset in ReadView().Presets)
             menu.Items.Add(
                 preset.Name,
                 null,
@@ -978,11 +1006,12 @@ internal sealed class ControlWindow : Form
                 }
             );
         var delete = new ToolStripMenuItem("Apagar preset");
-        foreach (var preset in _store.Read().Presets)
+        foreach (var preset in ReadView().Presets)
             delete.DropDownItems.Add(
                 preset.Name,
                 null,
-                (_, _) => Commit(s => s.Presets.RemoveAll(p => p.Name == preset.Name))
+                (_, _) =>
+                    Commit(s => s.Presets.RemoveAll(p => p.Name == preset.Name), permanent: true)
             );
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(delete);
@@ -1024,27 +1053,39 @@ internal sealed class ControlWindow : Form
         dialog.AcceptButton = save;
         LightTheme.Style(dialog);
         if (dialog.ShowDialog(this) == DialogResult.OK)
-            Commit(s =>
-            {
-                s.Presets.RemoveAll(p =>
-                    p.Name.Equals(name.Text.Trim(), StringComparison.OrdinalIgnoreCase)
-                );
-                s.Presets.Add(new(name.Text.Trim(), ReadColor()));
-            });
+            Commit(
+                s =>
+                {
+                    s.Presets.RemoveAll(p =>
+                        p.Name.Equals(name.Text.Trim(), StringComparison.OrdinalIgnoreCase)
+                    );
+                    s.Presets.Add(new(name.Text.Trim(), ReadColor()));
+                },
+                permanent: true
+            );
     }
 
     private bool ChooseLocation()
     {
-        using var dialog = new LocationDialog(_store.Read().Timing.Location);
+        using var dialog = new LocationDialog(ReadView().Timing.Location);
         if (dialog.ShowDialog(this) != DialogResult.OK || dialog.SelectedLocation is null)
             return false;
-        return Commit(s => s.Timing.Location = dialog.SelectedLocation);
+        return Commit(
+            s =>
+            {
+                s.Timing.Location = dialog.SelectedLocation;
+                if (s.Today is { } today)
+                    today.Timing.Location = dialog.SelectedLocation;
+            },
+            permanent: true
+        );
     }
 
     public void ApplyPreset(ColorProfile profile)
     {
         if (_selectedMonitor is null)
             return;
+        SetScope(true);
         _editingManual = true;
         Commit(s =>
         {
@@ -1057,6 +1098,7 @@ internal sealed class ControlWindow : Form
 
     private void StartManualEdit()
     {
+        SetScope(true);
         _editingManual = true;
         Commit(s =>
         {
@@ -1083,6 +1125,7 @@ internal sealed class ControlWindow : Form
     {
         if (IsDisposed)
             return;
+        ExpireTemporaryUi();
         UpdateDisplays(snapshot.Monitors.Select(m => m.Display));
         var state = snapshot.Monitors.FirstOrDefault(m => m.Display.Id == _selectedMonitor);
         var color =
@@ -1095,9 +1138,10 @@ internal sealed class ControlWindow : Form
             : $"{color}  /  {state.Profile.Brightness:P0}";
         if (Environment.TickCount64 < _messageUntil)
             return;
-        var monitor = _store.Read().Monitors.FirstOrDefault(m => m.Id == _selectedMonitor);
+        var monitor = ReadView().Monitors.FirstOrDefault(m => m.Id == _selectedMonitor);
         _status.Text =
             _controller?.Error
+            ?? _controller?.SecureDesktopError
             ?? snapshot.CursorError
             ?? state?.Error
             ?? (
@@ -1106,47 +1150,50 @@ internal sealed class ControlWindow : Form
                 : !state.Enabled ? "Filtro em pausa neste ecrã."
                 : monitor?.Scheduled != true
                     ? "Ajuste manual ativo. Ativa o horário para retomar as mudanças automáticas."
-                : "Arrasta os pontos para ajustar. Duplo clique adiciona um ponto. Ctrl+Z desfaz."
+                : _todayMode
+                    ? "Só hoje: ajusta livremente. Às 00:00 volta ao programa. Ctrl+Z desfaz."
+                : "Programa: estas alterações repetem-se. Duplo clique numa transição abre a curva."
             );
     }
 
     internal void VerifyPreviewControls()
     {
+        SetScope(false);
         var selected = _selectedMonitor!;
-        var other = _store.Read().Monitors.First(m => m.Id != selected);
+        var other = ReadView().Monitors.First(m => m.Id != selected);
         var otherColors = new Dictionary<string, ColorProfile>(other.PointColors);
-        _selectedPoint = _store.Read().Timing.Points[0].Id;
+        _selectedPoint = ReadView().Timing.Points[0].Id;
         _editingManual = false;
         Reload();
-        var originalTime = CurrentPoint(_store.Read())!.Time;
+        var originalTime = CurrentPoint(ReadView())!.Time;
         _graph.ExerciseDrag(
             _selectedPoint,
             8 * 60 + 45,
             3000,
             () =>
             {
-                if (CurrentPoint(_store.Read())!.Time != originalTime)
+                if (CurrentPoint(ReadView())!.Time != originalTime)
                     throw new InvalidOperationException("Dragging persisted before release.");
             }
         );
-        if (CurrentPoint(_store.Read())!.Time != new TimeOnly(8, 45))
+        if (CurrentPoint(ReadView())!.Time != new TimeOnly(8, 45))
             throw new InvalidOperationException("Graph drag did not save the shared time.");
         _graph.ExerciseDrag(_selectedPoint, 8 * 60, 4000, () => { }, true);
-        if (CurrentPoint(_store.Read())!.Time != new TimeOnly(8, 45))
+        if (CurrentPoint(ReadView())!.Time != new TimeOnly(8, 45))
             throw new InvalidOperationException("Escape did not cancel graph drag.");
         _graph.ExerciseKey(Keys.Right);
-        if (CurrentPoint(_store.Read())!.Time != new TimeOnly(8, 50))
+        if (CurrentPoint(ReadView())!.Time != new TimeOnly(8, 50))
             throw new InvalidOperationException("Graph keyboard editing failed.");
         _temperature.Value = 4000;
-        if (Current(_store.Read()).PointColors[_selectedPoint].Temperature != 4000)
+        if (Current(ReadView()).PointColors[_selectedPoint].Temperature != 4000)
             throw new InvalidOperationException("Point numeric binding failed.");
         _temperature.Value = 2700;
         _transition.Value = 30;
-        if (_store.Read().Timing.TransitionMinutes != 30)
+        if (ReadView().Timing.TransitionMinutes != 30)
             throw new InvalidOperationException("Global transition binding failed.");
         _time.Text = "08:30";
         SaveClockTime();
-        var changed = _store.Read();
+        var changed = ReadView();
         if (
             ScheduleTimeline
                 .Points(changed.Timing, changed.Monitors.Single(m => m.Id == other.Id))[0]
@@ -1161,26 +1208,27 @@ internal sealed class ControlWindow : Form
             throw new InvalidOperationException("Editing changed other screen colors.");
         Undo();
         _shared.Checked = false;
-        if (Current(_store.Read()).UseSharedSchedule)
+        if (Current(ReadView()).UseSharedSchedule)
             throw new InvalidOperationException("Detach binding failed.");
         _shared.Checked = true;
         _anchor.SelectedIndex = 1;
-        if (CurrentPoint(_store.Read())?.Anchor != TimeAnchor.Sunrise)
+        if (CurrentPoint(ReadView())?.Anchor != TimeAnchor.Sunrise)
             throw new InvalidOperationException("Solar point binding failed.");
         _offset.Value = 20;
         _brightnessView = true;
         Reload();
         _brightness.Value = 35;
-        if (Current(_store.Read()).PointColors[_selectedPoint].Brightness != .35)
+        if (Current(ReadView()).PointColors[_selectedPoint].Brightness != .35)
             throw new InvalidOperationException("Point brightness binding failed.");
         ApplyPreset(new(ColorMode.PureRed, 500, .15));
-        if (!_red.Checked || _temperature.Enabled || Current(_store.Read()).Scheduled)
+        if (!_red.Checked || _temperature.Enabled || Current(ReadView()).Scheduled)
             throw new InvalidOperationException("Manual red override failed.");
         _scheduled.Checked = true;
         _filterCursor.Checked = false;
-        if (_store.Read().FilterCursor)
+        if (ReadView().FilterCursor)
             throw new InvalidOperationException("Cursor binding failed.");
         _filterCursor.Checked = true;
+        VerifyTemporaryControls();
         _brightnessView = false;
         _editingManual = false;
         Reload();
@@ -1189,7 +1237,7 @@ internal sealed class ControlWindow : Form
     internal void PreparePreview(bool brightness, bool oled = false)
     {
         _selectedMonitor = oled ? "preview-oled" : "preview-internal";
-        _selectedPoint = _store.Read().Timing.Points.Last().Id;
+        _selectedPoint = ReadView().Timing.Points.Last().Id;
         _brightnessView = brightness;
         _editingManual = false;
         _history.Clear();
@@ -1197,7 +1245,7 @@ internal sealed class ControlWindow : Form
         Reload();
         _graph.StaticPreview();
         ActiveControl = _brightnessView ? _brightnessTab : _temperatureTab;
-        var settings = _store.Read();
+        var settings = ReadView();
         var profile = ScheduleTimeline.Evaluate(
             settings.Timing,
             Current(settings),
@@ -1205,8 +1253,9 @@ internal sealed class ControlWindow : Form
         );
         _now.Text =
             $"{(profile.Mode == ColorMode.PureRed ? "Vermelho puro" : $"{profile.Temperature:0} K")}  /  {profile.Brightness:P0}";
-        _status.Text =
-            "Arrasta os pontos para ajustar. Duplo clique adiciona um ponto. Ctrl+Z desfaz.";
+        _status.Text = _todayMode
+            ? "Só hoje: ajusta livremente. Às 00:00 volta ao programa. Ctrl+Z desfaz."
+            : "Programa: estas alterações repetem-se. Duplo clique numa transição abre a curva.";
     }
 
     protected override void OnHandleCreated(EventArgs e)

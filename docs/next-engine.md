@@ -1,4 +1,4 @@
-# Candlelight 0.3: visual schedules and independent monitor colors
+# Candlelight 0.4: solar curves and temporary daily adjustments
 
 <p><img src="../favicon.png" width="64" height="64" alt="Candlelight candle icon" /></p>
 
@@ -8,6 +8,13 @@ establish the final displayed color. The new application does not use that
 handover, gamma ramps, private color-system exports or Night Light writes.
 
 ## What is included
+
+The recurring program and temporary edits now have separate storage. Temporary
+points, curves and manual profiles expire at the city's local midnight, including
+after suspend/restart and inside the protected desktop. A solar-cycle editor
+configures sunrise/sunset offsets, durations and custom monotone Bézier curves;
+the calendar preview shows the schedule on any other date. See
+[the updated schedule guide](schedules.md).
 
 ![Essential Candlelight controls](next-interface.png)
 

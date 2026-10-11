@@ -1,9 +1,12 @@
 # Protected desktop prototype (0.2.9)
 
-The 0.3.0 schedule update retains this rendering and lifetime mechanism. It adds
-validated dated color events (schema 2, with schema-1 reading compatibility) so
-the ordinary and protected desktops evaluate the same global transitions and
-resolved solar times. Event count, ordering, profiles and total payload size are
+The 0.4.0 schedule update retains this rendering and lifetime mechanism. It adds
+bounded monotone Bézier parameters and an expiring temporary schedule (schema 3,
+with schema-1/2 reading compatibility) to the dated color events. The protected
+desktop receives both base events and today's override, so it can revert at
+midnight without waiting for the ordinary process to publish another packet.
+Both desktops evaluate the same transitions and resolved solar times. Event
+count, ordering, profiles, override lifetime (at most 26 hours) and total payload size are
 bounded. The secure process receives no location/network capability. See
 [schedule evaluation and migration](schedules.md). The handoff observations
 below describe the physical 0.2.9 tests; schedule changes do not establish new

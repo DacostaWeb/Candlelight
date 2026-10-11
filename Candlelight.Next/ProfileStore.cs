@@ -12,7 +12,7 @@ internal sealed record Preset(string Name, ColorProfile Profile);
 
 internal sealed record AppSettings
 {
-    public int Schema { get; set; } = 2;
+    public int Schema { get; set; } = 3;
     public bool FilterCursor { get; set; } = true;
     public SchedulePlan Timing { get; set; } = new();
     public List<MonitorProfile> Monitors { get; set; } = [];
@@ -24,6 +24,7 @@ internal sealed record AppSettings
         new("OLED vermelho", new(ColorMode.PureRed, 500, 0.15)),
     ];
     public string? SelectedMonitor { get; set; }
+    public TodaySchedule? Today { get; set; }
 }
 
 internal sealed class ProfileStore
@@ -44,10 +45,13 @@ internal sealed class ProfileStore
             ? JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(Path), Json)
                 ?? throw new InvalidDataException("Settings are empty.")
             : Import(import);
-        var migrated = _settings.Schema == 1;
-        if (migrated)
+        var originalSchema = _settings.Schema;
+        var migrated = originalSchema is 1 or 2;
+        if (originalSchema == 1)
             Migrate(_settings);
-        if (_settings.Schema != 2)
+        if (_settings.Schema == 2)
+            _settings.Schema = 3;
+        if (_settings.Schema != 3)
             throw new InvalidDataException("Unsupported settings schema.");
         if (_settings.Timing.Points.Count == 0)
             SeedTiming(_settings);
@@ -56,7 +60,12 @@ internal sealed class ProfileStore
         {
             File.Copy(
                 Path,
-                Path + ".schema1-" + DateTime.UtcNow.ToString("yyyyMMddHHmmssfff") + ".bak"
+                Path
+                    + ".schema"
+                    + originalSchema
+                    + "-"
+                    + DateTime.UtcNow.ToString("yyyyMMddHHmmssfff")
+                    + ".bak"
             );
             Update(_ => { });
         }
@@ -96,11 +105,24 @@ internal sealed class ProfileStore
                     var monitor = new MonitorProfile { Id = display.Id, Name = display.Name };
                     SeedColors(settings, monitor);
                     settings.Monitors.Add(monitor);
+                    if (settings.Today is { } today)
+                    {
+                        var temporary = new MonitorProfile { Id = display.Id, Name = display.Name };
+                        SeedColors(
+                            settings with
+                            {
+                                Timing = today.Timing,
+                                Monitors = today.Monitors,
+                            },
+                            temporary
+                        );
+                        today.Monitors.Add(temporary);
+                    }
                 }
         });
     }
 
-    private static AppSettings Clone(AppSettings settings) =>
+    internal static AppSettings Clone(AppSettings settings) =>
         JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(settings, Json), Json)!;
 
     private static void Validate(AppSettings settings)
@@ -126,6 +148,33 @@ internal sealed class ProfileStore
             if (string.IsNullOrWhiteSpace(preset.Name))
                 throw new InvalidDataException("A preset needs a name.");
             preset.Profile.Validate();
+        }
+        if (settings.Today is { } today)
+        {
+            if (
+                today.ExpiresAt <= today.StartsAt
+                || today.ExpiresAt - today.StartsAt > TimeSpan.FromHours(26)
+            )
+                throw new InvalidDataException("Invalid temporary schedule lifetime.");
+            Validate(
+                settings with
+                {
+                    Timing = today.Timing,
+                    Monitors = today.Monitors,
+                    Today = null,
+                }
+            );
+        }
+    }
+
+    internal bool ExpireToday(DateTimeOffset now)
+    {
+        lock (_gate)
+        {
+            if (_settings.Today is not { } today || now < today.ExpiresAt)
+                return false;
+            Update(s => s.Today = null);
+            return true;
         }
     }
 

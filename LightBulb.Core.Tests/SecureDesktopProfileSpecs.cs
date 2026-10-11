@@ -65,7 +65,7 @@ public class SecureDesktopProfileSpecs
 
     [Theory]
     [InlineData("null")]
-    [InlineData("{\"Schema\":3,\"Monitors\":[]}")]
+    [InlineData("{\"Schema\":4,\"Monitors\":[]}")]
     [InlineData("{\"Schema\":1,\"Monitors\":null}")]
     [InlineData("{\"Schema\":1,\"Monitors\":[null]}")]
     [InlineData("{\"Schema\":1,\"Monitors\":[],\"Command\":\"anything\"}")]

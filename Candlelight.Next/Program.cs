@@ -215,6 +215,7 @@ internal static class Program
                     s.Timing = fixture.Timing;
                     s.Monitors = fixture.Monitors;
                     s.FilterCursor = fixture.FilterCursor;
+                    s.Today = null;
                 });
                 form.Reload();
                 form.PreparePreview(false);
@@ -236,6 +237,37 @@ internal static class Program
                     Path.Combine(directory, "controls.png"),
                     System.Drawing.Imaging.ImageFormat.Png
                 );
+                using (
+                    var solar = new SolarCycleDialog(
+                        fixture.Timing,
+                        fixture.Monitors[0],
+                        DateOnly.FromDateTime(DateTime.Now),
+                        "Programa"
+                    )
+                )
+                {
+                    solar.Show(form);
+                    await Task.Delay(150);
+                    solar.VerifyInteraction();
+                    CaptureDialog(solar, "solar.png");
+                }
+                using (
+                    var curve = new TransitionDialog(
+                        fixture.Timing.Points[0] with
+                        {
+                            TransitionMinutes = 90,
+                            Curve = Candlelight.Engine.TransitionCurve.SlowStart,
+                        },
+                        fixture.Timing,
+                        "Só hoje"
+                    )
+                )
+                {
+                    curve.Show(form);
+                    await Task.Delay(150);
+                    curve.VerifyInteraction();
+                    CaptureDialog(curve, "curve.png");
+                }
                 form.PreparePreview(true, true);
                 using (var brightness = new Bitmap(form.Width, form.Height))
                 {
@@ -307,8 +339,48 @@ internal static class Program
                 }
                 File.WriteAllText(
                     Path.Combine(directory, "verification.txt"),
-                    "PASS: graph edits, shared hours with independent colors, global transitions, undo, detach/rejoin, solar anchor/offset, brightness, manual red, schedule resume, cursor option. No real renderer started."
+                    "PASS: graph edits, shared hours, global transitions, undo, detach/rejoin, solar anchor/offset, brightness, temporary manual red, program isolation, temporary curve undo/restore, solar phases, Bézier drag/cancel/precision, schedule resume, cursor option, native layout. No real renderer started."
                 );
+
+                void CaptureDialog(Form dialog, string name)
+                {
+                    using var screenshot = new Bitmap(dialog.Width, dialog.Height);
+                    dialog.DrawToBitmap(screenshot, new(0, 0, screenshot.Width, screenshot.Height));
+                    screenshot.Save(
+                        Path.Combine(directory, name),
+                        System.Drawing.Imaging.ImageFormat.Png
+                    );
+                    File.WriteAllText(
+                        Path.Combine(directory, name + ".layout.txt"),
+                        string.Join(
+                            "\n",
+                            Walk(dialog)
+                                .Select(c =>
+                                    $"{c.GetType().Name} {c.Text}: {c.Bounds}, parent={c.Parent?.ClientRectangle}"
+                                )
+                        )
+                    );
+                    foreach (
+                        var control in Walk(dialog)
+                            .Where(c => c.Visible && c is Button or CheckBox or NumericUpDown)
+                    )
+                    {
+                        var bounds = dialog.RectangleToClient(
+                            control.RectangleToScreen(control.ClientRectangle)
+                        );
+                        if (!dialog.ClientRectangle.Contains(bounds))
+                            throw new InvalidOperationException(
+                                "Clipped dialog control: " + control.Text
+                            );
+                        if (
+                            control.Parent is { } parent
+                            && !parent.ClientRectangle.Contains(control.Bounds)
+                        )
+                            throw new InvalidOperationException(
+                                "Clipped dialog row: " + control.Text
+                            );
+                    }
+                }
             }
             catch (Exception error)
             {

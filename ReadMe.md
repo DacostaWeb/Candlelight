@@ -2,12 +2,13 @@
 
 <p><img src="favicon.png" width="96" height="96" alt="Candlelight candle icon" /></p>
 
-**0.3.0: visual daily schedules.** Drag temperature and brightness points on a
-24-hour graph. Monitors share their hours by default and keep independent colors;
-copy another screen's colors or detach its hours when needed. One global duration
-controls smooth or linear transitions. Sunrise/sunset anchors follow the date,
-location and daylight-saving time, with optional offsets. Existing schedules and
-presets migrate with a backup. See [the schedule guide](docs/schedules.md).
+**0.4.0: solar curves and temporary adjustments.** Shape sunrise and sunset
+transitions with draggable Bézier controls, independent durations and offsets.
+The same curves follow the sun throughout the year. **Só hoje** edits a separate
+temporary layer that expires at local midnight; **Programa** edits the recurring
+schedule. Monitor hours and curves stay shared by default, with independent color
+and brightness. Existing schedules and presets migrate with a backup.
+See [the schedule guide](docs/schedules.md).
 
 ![Candlelight daily schedule](docs/next-interface.png)
 

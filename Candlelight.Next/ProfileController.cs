@@ -58,18 +58,12 @@ internal sealed class ProfileController : IDisposable
         {
             _store.EnsureDisplays(DisplayCatalog.GetDisplays());
             var now = DateTimeOffset.Now;
-            var settings = _store.Read();
+            _store.ExpireToday(now);
+            var saved = _store.Read();
+            var settings = ScheduleSession.Effective(saved, now);
             try
             {
-                var secure = SecureDesktopProfiles.Encode(
-                    settings.Monitors.Select(m => new SecureMonitorProfile(
-                        m.Id,
-                        m.Enabled,
-                        m.Manual,
-                        [],
-                        ScheduleTimeline.ForTransfer(settings.Timing, m, now)
-                    ))
-                );
+                var secure = SecureDesktopProfiles.Encode(ScheduleSession.ForTransfer(saved, now));
                 if (
                     _lastSecureProfiles is null
                     || !secure.AsSpan().SequenceEqual(_lastSecureProfiles)
