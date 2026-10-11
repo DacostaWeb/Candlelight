@@ -36,18 +36,24 @@ try {
         if (!$old.StartExe.StartsWith($source + '\',[StringComparison]::OrdinalIgnoreCase)) { throw 'AT registration no longer belongs to the baseline.' }
         $backup[$key] = @{ StartExe = $old.StartExe; ApplicationName = $old.ApplicationName; Description = $old.Description }
     }
-    if (Test-Path -LiteralPath $destination) { throw 'The destination already exists.' }
+    $reuseDestination = Test-Path -LiteralPath $destination
     if ((Get-Item -LiteralPath (Split-Path -Parent $destination)).Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) { throw 'The installation parent must not be a link.' }
-    New-Item -ItemType Directory -Path $destination | Out-Null
-    foreach ($item in Get-ChildItem -LiteralPath $source) { Copy-Item -LiteralPath $item.FullName -Destination $destination -Recurse }
+    if ($reuseDestination) {
+        if ((Get-Item -LiteralPath $destination).Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) { throw 'The installation must not be a link.' }
+        $existingManifest = Get-Content -LiteralPath (Join-Path $destination 'SecureDesktopPackage.json') -Raw | ConvertFrom-Json
+        if ($existingManifest.Version -ne '0.3.0') { throw 'The existing destination is not this update.' }
+    } else {
+        New-Item -ItemType Directory -Path $destination | Out-Null
+        foreach ($item in Get-ChildItem -LiteralPath $source) { Copy-Item -LiteralPath $item.FullName -Destination $destination -Recurse }
+    }
     foreach ($name in $requiredFiles) {
-        Copy-Item -LiteralPath (Join-Path $PreparedDirectory $name) -Destination (Join-Path $destination $name) -Force
+        if (!$reuseDestination) { Copy-Item -LiteralPath (Join-Path $PreparedDirectory $name) -Destination (Join-Path $destination $name) -Force }
         $manifest.Files | Add-Member -NotePropertyName $name -NotePropertyValue $update.Files.$name -Force
     }
     $brokerImage = Join-Path $destination 'Candlelight.SecureBroker.exe'
     $manifest.Hotfix = '0.3.0: shared visual schedules and date-aware solar transitions'
     $manifest | Add-Member -NotePropertyName Version -NotePropertyValue '0.3.0' -Force
-    [IO.File]::WriteAllText((Join-Path $destination 'SecureDesktopPackage.json'), ($manifest | ConvertTo-Json -Depth 6))
+    if (!$reuseDestination) { [IO.File]::WriteAllText((Join-Path $destination 'SecureDesktopPackage.json'), ($manifest | ConvertTo-Json -Depth 6)) }
     foreach ($file in $manifest.Files.PSObject.Properties) {
         if ((Get-FileHash -LiteralPath (Join-Path $destination $file.Name)).Hash -ne $file.Value) { throw 'Installed hash mismatch.' }
     }
@@ -67,6 +73,7 @@ try {
     $serviceStopped = $true
     $change = Invoke-CimMethod -InputObject $service -MethodName Change -Arguments @{PathName = ('"' + $brokerImage + '" --secure-broker')}
     if ($change.ReturnValue -ne 0) { throw 'Cannot update the existing service executable.' }
+    $startedAt = [DateTimeOffset]::UtcNow
     Start-Service -Name 'Candlelight.SecureBroker'
     $ready = $false
     $sessionId = [Diagnostics.Process]::GetCurrentProcess().SessionId
@@ -77,7 +84,11 @@ try {
         try { $broker = Get-Content (Join-Path $env:ProgramData 'Candlelight\SecureDesktop\broker.json') -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json } catch { continue }
         if ($broker.error -or $broker.state.error) { throw ('Prewarming failed: ' + $broker.error + $broker.state.error) }
         try { $native = Get-Content $sessionDiagnostic -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json } catch { continue }
-        if ($broker.state.prepared -and $native.pid -eq $broker.state.rendererPid -and !$native.active -and $native.engine.LocalSurfaces -ge 1 -and $native.engine.InputDesktopInactive) { $ready = $true; break }
+        if (!$native.timestamp -or [DateTimeOffset]::Parse($native.timestamp) -lt $startedAt) { continue }
+        # Neutral daytime profiles legitimately need zero local filter surfaces.
+        # Verify the actual prewarmed renderer, its identity and errors instead.
+        if ($native.error -or $native.coverError) { throw ('Renderer preparation failed: ' + $native.error + $native.coverError) }
+        if ($broker.state.prepared -and $native.pid -eq $broker.state.rendererPid -and !$native.active -and $native.identity -eq 'SYSTEM' -and $native.secureDesktop -eq 'Winlogon' -and $native.inJob -and $native.engine.UiAccessEnabled -and $native.engine.InputDesktopInactive -and $native.engine.Monitors.Count -ge 1 -and !@($native.engine.Monitors | Where-Object { $_.Error }).Count) { $ready = $true; break }
     }
     if (!$ready) { throw 'The service did not prepare the inactive protected desktop.' }
     [IO.File]::WriteAllText($ResultPath, (@{ Success = $true; Destination = $destination; ExistingCertificateReused = $true; Version = '0.3.0' } | ConvertTo-Json))
