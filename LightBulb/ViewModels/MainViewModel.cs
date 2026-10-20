@@ -148,7 +148,6 @@ public partial class MainViewModel(
 
         // Disable this message in the future
         settingsService.IsFirstTimeExperienceEnabled = false;
-        settingsService.IsAutoStartEnabled = true;
         settingsService.Save();
 
         if (await dialogManager.ShowDialogAsync(dialog) != true)

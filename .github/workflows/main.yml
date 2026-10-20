@@ -37,20 +37,17 @@ jobs:
       - name: Publish self-contained portable app
         shell: pwsh
         run: ./scripts/publish.ps1
-      - name: Verify new compiled controls
+      - name: Build Windows installer
         shell: pwsh
-        run: |
-          dotnet Candlelight.Next/bin/Release/net10.0-windows/Candlelight.Next.dll "--preview=$env:GITHUB_WORKSPACE/artifacts/next-ui"
-          if ($LASTEXITCODE -ne 0) { throw 'New control verification failed.' }
-          Get-Content artifacts/next-ui/verification.txt
-      - name: Publish new renderer prototype
+        run: ./scripts/build-installer.ps1
+      - name: Verify install, upgrade and uninstall
         shell: pwsh
-        run: ./scripts/publish-next.ps1
-      - name: Upload new renderer prototype
+        run: ./scripts/verify-installer.ps1 -InstallerPath (Get-ChildItem artifacts/release/*-Setup-win-x64.exe).FullName
+      - name: Upload Windows installer
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: Candlelight.Next.win-x64
-          path: artifacts/Candlelight.Next.win-x64.zip
+          name: Candlelight-Setup-win-x64
+          path: artifacts/release/*-Setup-win-x64.exe
           if-no-files-found: error
       - name: Upload portable app
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

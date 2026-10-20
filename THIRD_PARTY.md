@@ -1,13 +1,5 @@
 # Credits
 
-The offline sunrise/sunset calculation in `Candlelight.Engine/SolarTimes.cs`
-implements the [NOAA general solar position equations](https://www.gml.noaa.gov/grad/solcalc/solareqns.PDF).
-City search uses the [Open-Meteo geocoding API](https://open-meteo.com/en/docs/geocoding-api),
-whose location data is supplied by [GeoNames](https://www.geonames.org/) under
-[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). It is used only when
-the user requests a city search; daily solar calculation is local. The configured
-Póvoa de Varzim coordinates are from [GeoNames](https://www.geonames.org/8014137/p-voa-de-varzim.html).
-
 Candlelight is a fork of [LightBulb](https://github.com/Tyrrrz/LightBulb), copyright
 2017–2026 Oleksii Holub, under the MIT license in [License.txt](License.txt).
 

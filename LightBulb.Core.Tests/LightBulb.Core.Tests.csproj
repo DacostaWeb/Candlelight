@@ -6,9 +6,6 @@
 
   <ItemGroup>
     <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
-    <Compile Include="../Candlelight.Next/ProfileStore.cs" Link="Next/ProfileStore.cs" />
-    <Compile Include="../Candlelight.Next/ScheduleEditing.cs" Link="Next/ScheduleEditing.cs" />
-    <Compile Include="../Candlelight.Next/ScheduleSession.cs" Link="Next/ScheduleSession.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -25,6 +22,5 @@
     <ProjectReference Include="../LightBulb.Core/LightBulb.Core.csproj" />
     <ProjectReference Include="../LightBulb.PlatformInterop/LightBulb.PlatformInterop.csproj" />
     <ProjectReference Include="../LightBulb/LightBulb.csproj" />
-    <ProjectReference Include="../Candlelight.Engine/Candlelight.Engine.csproj" />
   </ItemGroup>
 </Project>

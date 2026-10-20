@@ -13,5 +13,6 @@ Installer/Source/
 TestResults/
 .tools/
 artifacts/
+release/
 Settings.json
 NightLightGuard.state*

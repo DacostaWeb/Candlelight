@@ -185,23 +185,9 @@ The diagnostic switch is not installed as an automatic application feature.
 The physical 0.1.4 test failed: after the black cover, the user observed red,
 white/blue, then orange. Stored ramps still matched the requested 2700 K values,
 and Night Light was logically off. Neither readback nor a fixed settling delay
-therefore certified the visible result. The next experiment replaces the gamma
-handover entirely with an independent, documented Magnification renderer;
-see [the essential 0.2 prototype](next-engine.md). Its physical wake gate remains
-open until the user tests the new mechanism.
-
-In the 0.2 prototype, the user reported that the auto-hidden taskbar remained
-unfiltered. Raising the windowed hosts on every refresh did not fix it.
-The global desktop effect subsequently filtered the taskbar, physically
-confirmed by the user at 2700 K / 100% with the control window hidden and Night
-Light off. This applies only when connected monitors share one enabled profile.
-Different profiles still use the windowed path and need a shell coverage solution.
-The user subsequently reported that wake behavior appeared to work. Repeated
-physical suspension and hibernation remain separate verification gates.
-The global effect left the hardware mouse cursor unfiltered. A temporary minimum
-trail made it warm, but the user rejected the trail and it was removed. Version
-0.2.2 uses temporary standard cursor bitmap copies instead; see the cursor
-limitations and restoration behavior in [the prototype documentation](next-engine.md).
+therefore certified the visible result. Version 0.5.0 restores this engine and
+does not claim to solve the physical wake flash. The subsequent Magnification
+experiment was abandoned; its code and findings remain in Git history.
 
 Sources:
 
