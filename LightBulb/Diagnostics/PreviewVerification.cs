@@ -5,12 +5,14 @@ using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using LightBulb.Core;
 using LightBulb.ViewModels;
+using LightBulb.Views.Components;
 
 namespace LightBulb.Diagnostics;
 
@@ -125,8 +127,122 @@ internal static class PreviewVerification
                 "Switching displays lost the independent profile."
             );
             controls.ModeIndex = 0;
+            controls.DayTemperature = 2700;
+            controls.NightTemperature = 500;
+            controls.DayBrightness = 100;
+            controls.NightBrightness = 100;
+            controls.LocationQuery = "41.38215, -8.75776";
+            await controls.ResolveSolarLocationCommand.ExecuteAsync(null);
+            Require(
+                controls.SolarStatus.Contains("calculadas diariamente"),
+                "The location input did not enable daily solar calculation."
+            );
+            controls.SelectedDisplay = controls.Displays[1];
+            controls.ModeIndex = 0;
+            controls.DayTemperature = 2700;
+            controls.NightTemperature = 500;
+            controls.DayBrightness = 100;
+            controls.NightBrightness = 25;
+            await Task.Delay(100);
+            var sunrise = window
+                .GetVisualDescendants()
+                .OfType<TransitionCurveControl>()
+                .Single(c => c.Name == "SunriseCurveEditor");
+            sunrise.MoveHandle(1, 0.2, 0.3);
+            Require(
+                controls.SunriseCurve.X1 == 0.2 && controls.SunriseCurve.Y1 == 0.3,
+                "Dragging a curve handle did not update the bound profile."
+            );
+            var duration = window
+                .GetVisualDescendants()
+                .OfType<NumericUpDown>()
+                .Single(n => n.Name == "SunsetDurationValue");
+            var previousRange = controls.SunsetRange;
+            duration.SetCurrentValue(NumericUpDown.ValueProperty, 90m);
+            Require(
+                controls.SunsetMinutes == 90 && controls.SunsetRange != previousRange,
+                "The duration input did not update the interval."
+            );
+            duration.SetCurrentValue(NumericUpDown.ValueProperty, 120m);
+            var curveButton = window
+                .GetVisualDescendants()
+                .OfType<Button>()
+                .First(b =>
+                    b.Command == controls.SetSunsetCurveCommand && b.CommandParameter is "late"
+                );
+            curveButton.Command!.Execute(curveButton.CommandParameter);
+            Require(
+                controls.SunsetCurve == TransitionCurve.Late,
+                "The evening curve preset did not bind."
+            );
+            controls.SetSunsetCurveCommand.Execute("smooth");
+            controls.SaveNow();
+            var saved = new Services.SettingsService();
+            saved.Load();
+            var savedOled = saved.DisplayProfiles.Single(p => p.Id == controls.SelectedDisplay.Id);
+            Require(
+                savedOled.SolarCycle?.SunriseCurve == controls.SunriseCurve
+                    && savedOled.NightConfiguration.Brightness == 0.25,
+                "Saved solar curves and per-monitor endpoints did not survive reload."
+            );
+            var normal = window
+                .GetVisualDescendants()
+                .OfType<ToggleButton>()
+                .Single(b => b.Name == "NormalColorsButton");
+            normal.SetCurrentValue(ToggleButton.IsCheckedProperty, true);
+            await Task.Delay(100);
+            Require(
+                controls.IsNormalColors
+                    && controls.SelectedDisplay.Current == ColorConfiguration.Default,
+                "Normal colors did not bypass the selected monitor."
+            );
+            Require(
+                controls.Displays[0].Current.Temperature <= 2700
+                    && controls.Displays[0].Current.Brightness == 1,
+                "Normal colors changed the other monitor."
+            );
+            controls.SelectedDisplay = controls.Displays[0];
+            Require(
+                !controls.IsNormalColors
+                    && controls.NightBrightness == 100
+                    && controls.SunriseCurve == TransitionCurve.Smooth,
+                "Solar profiles were not isolated between monitors."
+            );
+            controls.SelectedDisplay = controls.Displays[1];
+            Require(
+                controls.IsNormalColors && controls.SunriseCurve.X1 == 0.2,
+                "Switching monitors lost the bypass or curve."
+            );
+            normal.SetCurrentValue(ToggleButton.IsCheckedProperty, false);
+            await Task.Delay(100);
+            Require(
+                controls.SelectedDisplay.Current.Temperature <= 2700
+                    && controls.NightBrightness == 25
+                    && controls.SunsetMinutes == 120,
+                "Resuming normal operation did not preserve the solar program."
+            );
+            var monitorList = window.GetVisualDescendants().OfType<ListBox>().First();
+            foreach (var scroll in monitorList.GetVisualDescendants().OfType<ScrollViewer>())
+                scroll.Offset = default;
             await Task.Delay(100);
             Capture(window, directory, "day-night.png");
+            window.Width = 880;
+            window.Height = 600;
+            await Task.Delay(150);
+            Capture(window, directory, "solar-compact.png");
+            window.Width = 1080;
+            window.Height = 700;
+            await Task.Delay(150);
+            var editorScroll = window
+                .GetVisualDescendants()
+                .OfType<ScrollViewer>()
+                .Single(s => s.Name == "MonitorEditorScroll");
+            editorScroll.Offset = new Vector(0, 270);
+            await Task.Delay(150);
+            Capture(window, directory, "solar-full.png");
+            editorScroll.Offset = new Vector(0, 600);
+            await Task.Delay(150);
+            Capture(window, directory, "solar-settings.png");
             controls.SaveNow();
             var protection = window
                 .GetVisualDescendants()
@@ -193,7 +309,7 @@ internal static class PreviewVerification
             controls.SaveNow();
             File.WriteAllText(
                 Path.Combine(directory, "verification.txt"),
-                "PASS: compiled preset button binding; per-monitor isolation; schedule generation; invalid time validation; manual preset with invalid schedule; correction; bound row deletion; custom preset save/delete; switching monitors; settings save; wake protection toggle; opaque black cover.\n"
+                "PASS: compiled preset button binding; per-monitor isolation; schedule generation; invalid time validation; manual preset with invalid schedule; correction; bound row deletion; custom preset save/delete; switching monitors; solar location, curve handles, duration, presets, save/reload; per-monitor normal colors and resume; settings save; wake protection toggle; opaque black cover.\n"
             );
             App.Shutdown();
         }

@@ -4,6 +4,7 @@
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   xmlns:vm="clr-namespace:LightBulb.ViewModels.Components"
   xmlns:core="clr-namespace:LightBulb.Core;assembly=LightBulb.Core"
+  xmlns:views="clr-namespace:LightBulb.Views.Components"
   x:Name="DisplayControls"
   x:DataType="vm:DisplayControlsViewModel"
 >
@@ -78,17 +79,14 @@
             IsChecked="{Binding IsWakeRecoveryEnabled}"
             Content="Reforçar a reposição"
             FontSize="13"
+            ToolTip.Tip="Verifica e recupera a cor após a retoma."
           />
-          <TextBlock Classes="caption" Text="Verifica e recupera a cor após a retoma." />
           <ToggleSwitch
             x:Name="WakeProtectionSwitch"
             IsChecked="{Binding IsNightLightProtectionEnabled}"
             Content="Pausa a preto"
             FontSize="13"
-          />
-          <TextBlock
-            Classes="caption"
-            Text="Usa a Luz noturna na suspensão e cobre os ecrãs durante a reposição, cerca de 1–2 segundos."
+            ToolTip.Tip="Usa a Luz noturna na suspensão e cobre os ecrãs durante a reposição, cerca de 1–2 segundos."
           />
           <Button
             Command="{Binding ReapplyCommand}"
@@ -100,14 +98,18 @@
         </StackPanel>
       </Grid>
     </Border>
-    <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Disabled">
-      <StackPanel Margin="30,24,30,24" Spacing="20" IsEnabled="{Binding HasDisplay}">
+    <ScrollViewer
+      x:Name="MonitorEditorScroll"
+      Grid.Column="1"
+      HorizontalScrollBarVisibility="Disabled"
+    >
+      <StackPanel Margin="30,16,30,24" Spacing="12" IsEnabled="{Binding HasDisplay}">
         <TextBlock
           Text="{Binding PreviewNotice}"
           Foreground="{DynamicResource CandlelightAccent}"
           FontSize="13"
         />
-        <Grid ColumnDefinitions="*,Auto">
+        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12">
           <StackPanel Spacing="4">
             <TextBlock
               Text="{Binding SelectedDisplay.Name}"
@@ -121,28 +123,36 @@
               FontSize="20"
             />
           </StackPanel>
-          <ToggleSwitch
+          <ToggleButton
             Grid.Column="1"
+            x:Name="NormalColorsButton"
+            Content="{Binding NormalColorsLabel}"
+            IsChecked="{Binding IsNormalColors}"
+            VerticalAlignment="Center"
+            ToolTip.Tip="Mostrar todas as cores neste monitor; voltar a clicar retoma os ajustes guardados."
+          />
+          <ToggleSwitch
+            Grid.Column="2"
             IsChecked="{Binding IsDisplayEnabled}"
             Content="Ativo"
             VerticalAlignment="Center"
           />
         </Grid>
-        <Grid ColumnDefinitions="*,24,*">
-          <StackPanel Spacing="6">
-            <TextBlock Text="Nome do ecrã" Classes="caption" />
-            <TextBox Text="{Binding DisplayName}" PlaceholderText="Nome do monitor" />
-          </StackPanel>
-          <StackPanel Grid.Column="2" Spacing="6">
-            <TextBlock Text="Como ajustar" Classes="caption" />
-            <ComboBox
-              ItemsSource="{Binding Modes}"
-              SelectedIndex="{Binding ModeIndex}"
-              HorizontalAlignment="Stretch"
-            />
-          </StackPanel>
+        <TextBlock
+          Text="{Binding NormalColorsNotice}"
+          IsVisible="{Binding IsNormalColors}"
+          Classes="caption"
+        />
+        <Grid ColumnDefinitions="Auto,16,*">
+          <TextBlock Text="Como ajustar" Classes="caption" VerticalAlignment="Center" />
+          <ComboBox
+            Grid.Column="2"
+            ItemsSource="{Binding Modes}"
+            SelectedIndex="{Binding ModeIndex}"
+            HorizontalAlignment="Stretch"
+          />
         </Grid>
-        <ItemsControl ItemsSource="{Binding Presets}">
+        <ItemsControl ItemsSource="{Binding Presets}" IsVisible="{Binding !IsSunCycle}">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
               <WrapPanel />
@@ -213,7 +223,137 @@
           />
         </StackPanel>
         <StackPanel IsVisible="{Binding IsSunCycle}" Spacing="12">
-          <TextBlock Text="Dia e noite neste ecrã" Classes="section" />
+          <TextBlock Text="{Binding SolarStatus}" Classes="caption" />
+          <Grid ColumnDefinitions="*,24,*">
+            <StackPanel Spacing="6">
+              <TextBlock Text="Nascer do sol" FontWeight="SemiBold" FontSize="16" />
+              <TextBlock
+                Text="{Binding SunriseRange}"
+                Foreground="{DynamicResource CandlelightAccent}"
+                FontSize="18"
+              />
+              <TextBlock Text="Começa ao nascer do sol" Classes="caption" />
+              <views:TransitionCurveControl
+                x:Name="SunriseCurveEditor"
+                Height="170"
+                Curve="{Binding SunriseCurve}"
+                FromTemperature="{Binding NightTemperature}"
+                ToTemperature="{Binding DayTemperature}"
+                FromBrightness="{Binding NightBrightness}"
+                ToBrightness="{Binding DayBrightness}"
+                TextBrush="{DynamicResource CandlelightMuted}"
+                AccentBrush="{DynamicResource CandlelightAccent}"
+                GridBrush="{DynamicResource CandlelightLine}"
+              />
+              <Grid ColumnDefinitions="*,104" ColumnSpacing="8">
+                <TextBlock Text="Duração (min)" VerticalAlignment="Center" />
+                <NumericUpDown
+                  x:Name="SunriseDurationValue"
+                  Grid.Column="1"
+                  Minimum="0"
+                  Maximum="360"
+                  Increment="5"
+                  Value="{Binding SunriseMinutes}"
+                />
+              </Grid>
+              <WrapPanel>
+                <Button
+                  Content="Suave"
+                  Command="{Binding SetSunriseCurveCommand}"
+                  CommandParameter="smooth"
+                  Padding="9,5"
+                  Margin="0,0,4,4"
+                />
+                <Button
+                  Content="Linear"
+                  Command="{Binding SetSunriseCurveCommand}"
+                  CommandParameter="linear"
+                  Padding="9,5"
+                  Margin="0,0,4,4"
+                />
+                <Button
+                  Content="Mais cedo"
+                  Command="{Binding SetSunriseCurveCommand}"
+                  CommandParameter="early"
+                  Padding="9,5"
+                  Margin="0,0,4,4"
+                />
+                <Button
+                  Content="Mais tarde"
+                  Command="{Binding SetSunriseCurveCommand}"
+                  CommandParameter="late"
+                  Padding="9,5"
+                  Margin="0,0,4,4"
+                />
+              </WrapPanel>
+            </StackPanel>
+            <StackPanel Grid.Column="2" Spacing="6">
+              <TextBlock Text="Pôr do sol" FontWeight="SemiBold" FontSize="16" />
+              <TextBlock
+                Text="{Binding SunsetRange}"
+                Foreground="{DynamicResource CandlelightAccent}"
+                FontSize="18"
+              />
+              <TextBlock Text="Termina exatamente ao pôr do sol" Classes="caption" />
+              <views:TransitionCurveControl
+                x:Name="SunsetCurveEditor"
+                Height="170"
+                Curve="{Binding SunsetCurve}"
+                FromTemperature="{Binding DayTemperature}"
+                ToTemperature="{Binding NightTemperature}"
+                FromBrightness="{Binding DayBrightness}"
+                ToBrightness="{Binding NightBrightness}"
+                TextBrush="{DynamicResource CandlelightMuted}"
+                AccentBrush="{DynamicResource CandlelightAccent}"
+                GridBrush="{DynamicResource CandlelightLine}"
+              />
+              <Grid ColumnDefinitions="*,104" ColumnSpacing="8">
+                <TextBlock Text="Duração (min)" VerticalAlignment="Center" />
+                <NumericUpDown
+                  x:Name="SunsetDurationValue"
+                  Grid.Column="1"
+                  Minimum="0"
+                  Maximum="360"
+                  Increment="5"
+                  Value="{Binding SunsetMinutes}"
+                />
+              </Grid>
+              <WrapPanel>
+                <Button
+                  Content="Suave"
+                  Command="{Binding SetSunsetCurveCommand}"
+                  CommandParameter="smooth"
+                  Padding="9,5"
+                  Margin="0,0,4,4"
+                />
+                <Button
+                  Content="Linear"
+                  Command="{Binding SetSunsetCurveCommand}"
+                  CommandParameter="linear"
+                  Padding="9,5"
+                  Margin="0,0,4,4"
+                />
+                <Button
+                  Content="Mais cedo"
+                  Command="{Binding SetSunsetCurveCommand}"
+                  CommandParameter="early"
+                  Padding="9,5"
+                  Margin="0,0,4,4"
+                />
+                <Button
+                  Content="Mais tarde"
+                  Command="{Binding SetSunsetCurveCommand}"
+                  CommandParameter="late"
+                  Padding="9,5"
+                  Margin="0,0,4,4"
+                />
+              </WrapPanel>
+            </StackPanel>
+          </Grid>
+          <TextBlock
+            Text="Arrasta as duas pegas para moldar a curva. A cor e o brilho seguem o mesmo ritmo."
+            Classes="caption"
+          />
           <Grid
             ColumnDefinitions="*,130,130"
             RowDefinitions="Auto,Auto,Auto"
@@ -255,10 +395,28 @@
               Value="{Binding NightBrightness}"
             />
           </Grid>
-          <TextBlock
-            Classes="caption"
-            Text="As horas de nascer/pôr do sol e a duração da transição estão nas definições avançadas. Para escolher cada hora, usa o modo Horários."
-          />
+          <Expander
+            Header="Localização do sol · cidade ou coordenadas"
+            HorizontalAlignment="Stretch"
+          >
+            <StackPanel Spacing="8">
+              <TextBox
+                x:Name="SolarLocationQuery"
+                Text="{Binding LocationQuery}"
+                PlaceholderText="Ex.: Póvoa de Varzim, Portugal"
+              />
+              <Button
+                Content="Aplicar localização"
+                Command="{Binding ResolveSolarLocationCommand}"
+                HorizontalAlignment="Left"
+              />
+              <TextBlock Text="{Binding LocationFeedback}" Classes="caption" />
+              <TextBlock
+                Text="Localização partilhada pelos ecrãs. As horas usam o fuso do Windows e acompanham a hora de verão."
+                Classes="caption"
+              />
+            </StackPanel>
+          </Expander>
         </StackPanel>
         <StackPanel IsVisible="{Binding IsSchedule}" Spacing="12">
           <Grid ColumnDefinitions="*,Auto">
@@ -327,6 +485,9 @@
           />
           <TextBlock Text="{Binding ScheduleError}" TextWrapping="Wrap" Foreground="#E6AF86" />
         </StackPanel>
+        <Expander Header="Mudar o nome deste ecrã">
+          <TextBox Text="{Binding DisplayName}" PlaceholderText="Nome do monitor" />
+        </Expander>
         <Border Height="1" Background="{DynamicResource CandlelightLine}" />
         <StackPanel Spacing="12">
           <TextBlock Text="Presets num clique" Classes="section" />

@@ -5,16 +5,15 @@
 A Windows fork of [LightBulb](https://github.com/Tyrrrz/LightBulb) with independent
 color temperature, brightness and schedules for each monitor.
 
-**Version 0.5.0** returns to the LightBulb-based engine and controls from 0.1.4,
-with the approved candle icon and a Windows installer. The abandoned Next
-renderer, protected desktop service and solar-curve rewrite have been removed
-from the current source tree; their development remains in Git history.
+**Version 0.6.0** adds daily solar transitions with editable curves to the
+LightBulb-based engine and independent monitor controls. Each monitor has a
+**Cores normais** button that preserves its program for later resumption.
 
 ![Candlelight interface](docs/interface.png)
 
 ## Install
 
-Download **Candlelight-0.5.0-Setup-win-x64.exe** from
+Download **Candlelight-0.6.0-Setup-win-x64.exe** from
 [the latest release](https://github.com/DacostaWeb/Candlelight/releases/latest).
 Run it, choose whether to create a desktop shortcut and start with Windows, then
 open Candlelight. The installer supports Windows 10 (build 19041+) and Windows 11
@@ -39,6 +38,17 @@ Portable settings stay beside the executable. Close other gamma tools first.
 - Select a monitor in the left rail. Temperature and brightness apply to that
   monitor alone, including 500 K red-only output and software brightness down to 1%.
 - Choose **Dia / noite**, **Manual**, or **Horários** independently per screen.
+- In **Dia / noite**, set your city or coordinates once under **Localização do
+  sol**. Sunrise and sunset update every day, including daylight saving
+  changes, using the Windows time zone. New profiles default to 500 K at night
+  and 2700 K during the day, with two-hour transitions.
+- The morning transition **starts at sunrise**; the evening transition **ends at
+  sunset**. Drag the two handles on each curve, choose a curve preset or edit its
+  duration. Set night brightness to 25% for an OLED and 100% for an internal display
+  to keep separate brightness levels while both reach 2700 K / 100% by day.
+- **Cores normais** temporarily bypasses only the selected monitor's adjustments.
+  **Retomar ajustes** returns to its saved program at the current time. This
+  choice persists across restarts until switched off.
 - **OLED vermelho** applies 500 K and 15% brightness to the selected monitor.
 - Save your own presets, or use the built-in day, reading, night and red presets.
 - Daily schedules support `HH:mm`, temperature, brightness and transition duration,
@@ -60,7 +70,7 @@ dotnet test LightBulb.Core.Tests --configuration Release --no-build
 dotnet LightBulb/bin/Release/net10.0-windows/Candlelight.dll --preview --capture-preview=artifacts/ui
 ./scripts/publish.ps1
 ./scripts/build-installer.ps1
-./scripts/verify-installer.ps1 -InstallerPath artifacts/release/Candlelight-0.5.0-Setup-win-x64.exe
+./scripts/verify-installer.ps1 -InstallerPath artifacts/release/Candlelight-0.6.0-Setup-win-x64.exe
 ```
 
 Installer verification runs on a machine without an installed/running Candlelight.

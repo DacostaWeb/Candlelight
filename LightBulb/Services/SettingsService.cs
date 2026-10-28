@@ -52,10 +52,10 @@ public partial class SettingsService()
     public double MaximumBrightness => 1;
 
     [ObservableProperty]
-    public partial ColorConfiguration DayConfiguration { get; set; } = new(6600, 1);
+    public partial ColorConfiguration DayConfiguration { get; set; } = new(2700, 1);
 
     [ObservableProperty]
-    public partial ColorConfiguration NightConfiguration { get; set; } = new(3900, 0.85);
+    public partial ColorConfiguration NightConfiguration { get; set; } = new(500, 1);
 
     [ObservableProperty]
     public partial IReadOnlyList<DisplayProfile> DisplayProfiles { get; set; } = [];
@@ -92,7 +92,7 @@ public partial class SettingsService()
     // Location
 
     [ObservableProperty]
-    public partial bool IsManualSunriseSunsetEnabled { get; set; } = true;
+    public partial bool IsManualSunriseSunsetEnabled { get; set; }
 
     [ObservableProperty]
     [JsonPropertyName("ManualSunriseTime")]

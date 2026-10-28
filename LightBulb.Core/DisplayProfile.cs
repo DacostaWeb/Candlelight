@@ -16,6 +16,8 @@ public sealed record DisplayProfile
     public required string Id { get; init; }
     public required string Name { get; init; }
     public bool IsEnabled { get; init; } = true;
+    public bool IsNormalColors { get; init; }
+    public SolarCycleOptions? SolarCycle { get; init; }
     public DisplayControlMode Mode { get; init; }
     public ColorConfiguration ManualConfiguration { get; init; } = ColorConfiguration.Default;
     public ColorConfiguration DayConfiguration { get; init; } = ColorConfiguration.Default;
@@ -26,15 +28,27 @@ public sealed record DisplayProfile
         SolarTimes solarTimes,
         TimeSpan transitionDuration,
         double transitionOffset,
-        DateTimeOffset instant
+        DateTimeOffset instant,
+        GeoLocation? location = null,
+        TimeZoneInfo? timeZone = null
     ) =>
-        !IsEnabled ? ColorConfiguration.Default
+        !IsEnabled || IsNormalColors ? ColorConfiguration.Default
         : Mode == DisplayControlMode.Manual ? ManualConfiguration
         : Mode == DisplayControlMode.Schedule
             ? DailySchedule.Evaluate(
                 Schedule,
                 TimeOnly.FromDateTime(instant.DateTime),
                 ManualConfiguration
+            )
+        : SolarCycle is { } solar
+            ? global::LightBulb.Core.SolarCycle.Evaluate(
+                solar,
+                DayConfiguration,
+                NightConfiguration,
+                location,
+                solarTimes,
+                instant,
+                timeZone
             )
         : Cycle.InterpolateConfiguration(
             solarTimes,

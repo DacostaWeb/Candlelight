@@ -233,8 +233,17 @@ public partial class DisplayControlsViewModel : ViewModelBase
                         DayConfiguration = _settings.DayConfiguration,
                         NightConfiguration = _settings.NightConfiguration,
                         ManualConfiguration = _settings.NightConfiguration,
+                        SolarCycle = new SolarCycleOptions(),
                     };
                     _settings.DisplayProfiles = [.. _settings.DisplayProfiles, profile];
+                    _dirty = true;
+                }
+                else if (profile.Mode == DisplayControlMode.SunCycle && profile.SolarCycle is null)
+                {
+                    profile = profile with { SolarCycle = new SolarCycleOptions() };
+                    _settings.DisplayProfiles = _settings
+                        .DisplayProfiles.Select(p => p.Id == profile.Id ? profile : p)
+                        .ToArray();
                     _dirty = true;
                 }
                 Displays.Add(new DisplayItemViewModel(info, profile.Name));
@@ -286,6 +295,7 @@ public partial class DisplayControlsViewModel : ViewModelBase
             DayBrightness = profile.DayConfiguration.Brightness * 100;
             NightTemperature = profile.NightConfiguration.Temperature;
             NightBrightness = profile.NightConfiguration.Brightness * 100;
+            LoadSolarEditor(profile);
             foreach (var point in profile.Schedule.OrderBy(p => p.Time))
                 AddRow(point);
             ScheduleError = "";
@@ -313,6 +323,8 @@ public partial class DisplayControlsViewModel : ViewModelBase
             _dirty = true;
             QueueSave();
         }
+        else if (IsSolarEditorProperty(args.PropertyName))
+            PersistEditor();
         else if (
             args.PropertyName
             is nameof(DisplayName)
@@ -369,6 +381,8 @@ public partial class DisplayControlsViewModel : ViewModelBase
                 ? SelectedDisplay.Info.Name
                 : DisplayName.Trim(),
             IsEnabled = IsDisplayEnabled,
+            IsNormalColors = IsNormalColors,
+            SolarCycle = IsSunCycle ? EditedSolarOptions : old.SolarCycle,
             Mode = (DisplayControlMode)Math.Clamp(ModeIndex, 0, 2),
             ManualConfiguration = Config(Temperature, Brightness),
             DayConfiguration = Config(DayTemperature, DayBrightness),
@@ -451,6 +465,7 @@ public partial class DisplayControlsViewModel : ViewModelBase
         Brightness = preset.Configuration.Brightness * 100;
         ModeIndex = 1;
         IsDisplayEnabled = true;
+        IsNormalColors = false;
         _loading = false;
         PersistEditor();
         Feedback =
@@ -541,22 +556,30 @@ public partial class DisplayControlsViewModel : ViewModelBase
         double brightnessOffset
     )
     {
+        UpdateSolarInfo(instant);
         var configurations = new Dictionary<string, ColorConfiguration>(
             StringComparer.OrdinalIgnoreCase
         );
         foreach (var profile in _settings.DisplayProfiles)
         {
             var config =
-                active
+                profile.IsNormalColors ? ColorConfiguration.Default
+                : active
                     ? profile.Evaluate(
                         solarTimes,
                         _settings.ConfigurationTransitionDuration,
                         _settings.ConfigurationTransitionOffset,
-                        instant
+                        instant,
+                        _settings.IsManualSunriseSunsetEnabled ? null : _settings.Location
                     )
                 : _settings.IsDefaultToDayConfigurationEnabled ? profile.DayConfiguration
                 : ColorConfiguration.Default;
-            if (active && profile.IsEnabled && profile.Id == SelectedDisplay?.Id)
+            if (
+                active
+                && profile.IsEnabled
+                && !profile.IsNormalColors
+                && profile.Id == SelectedDisplay?.Id
+            )
                 config = config.WithOffset(temperatureOffset, brightnessOffset);
             configurations[profile.Id] = config.Clamp(500, 20000, 0.01, 1);
         }
