@@ -14,8 +14,7 @@ function Invoke-Setup([string]$LogName) {
     if (!$process.WaitForExit(60000)) { throw 'Installer verification timed out.' }
     if ($process.ExitCode -ne 0) { throw ('Installer failed: ' + $process.ExitCode + '; see ' + $testRoot) }
 }
-$runPath = 'HKCU:/Software/Microsoft/Windows/CurrentVersion/Run'
-$originalRun = Get-ItemPropertyValue -LiteralPath $runPath -Name Candlelight -ErrorAction SilentlyContinue
+$originalRun = [Microsoft.Win32.Registry]::GetValue('HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run', 'Candlelight', $null)
 $settingsPath = Join-Path $env:APPDATA 'Candlelight/Settings.json'
 $originalSettingsHash = if (Test-Path $settingsPath) { (Get-FileHash $settingsPath).Hash } else { $null }
 Invoke-Setup 'install.log'
@@ -32,7 +31,7 @@ if ((Get-FileHash (Join-Path $appDir 'Candlelight.exe')).Hash -ne $exeHash) { th
 $uninstall = Start-Process -FilePath (Join-Path $appDir 'unins000.exe') -ArgumentList ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG="' + (Join-Path $testRoot 'uninstall.log') + '"') -WindowStyle Hidden -PassThru
 if (!$uninstall.WaitForExit(60000) -or $uninstall.ExitCode -ne 0) { throw 'Uninstaller failed.' }
 if ((Test-Path (Join-Path $appDir 'Candlelight.exe')) -or (Test-Path $uninstallKey)) { throw 'Uninstall left the program or registration behind.' }
-$finalRun = Get-ItemPropertyValue -LiteralPath $runPath -Name Candlelight -ErrorAction SilentlyContinue
+$finalRun = [Microsoft.Win32.Registry]::GetValue('HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run', 'Candlelight', $null)
 if ($originalRun -ne $finalRun) { throw 'An unselected startup task changed the existing startup entry.' }
 $finalSettingsHash = if (Test-Path $settingsPath) { (Get-FileHash $settingsPath).Hash } else { $null }
 if ($originalSettingsHash -ne $finalSettingsHash) { throw 'Installation modified existing user settings.' }
