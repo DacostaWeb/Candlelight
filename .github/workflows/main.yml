@@ -61,3 +61,25 @@ jobs:
         with:
           name: interface-verification
           path: artifacts/ui/
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: verify-and-pack
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Publish verified downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          gh run download "$GITHUB_RUN_ID" --name Candlelight-Setup-win-x64 --dir release
+          gh run download "$GITHUB_RUN_ID" --name Candlelight.win-x64 --dir release
+          mv "release/Candlelight-$version-Setup-win-x64.exe" release/Candlelight-Setup-win-x64.exe
+          mv release/Candlelight.win-x64.zip release/Candlelight-win-x64.zip
+          (cd release && sha256sum Candlelight-Setup-win-x64.exe Candlelight-win-x64.zip > SHA256SUMS.txt)
+          gh release create "$GITHUB_REF_NAME" release/* --verify-tag --title "Candlelight $version" --notes-file "docs/releases/$version.md"

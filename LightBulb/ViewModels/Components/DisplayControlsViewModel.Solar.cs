@@ -17,7 +17,7 @@ public partial class DisplayControlsViewModel
     public string NormalColorsLabel => IsNormalColors ? "Retomar ajustes" : "Cores normais";
     public string NormalColorsNotice =>
         IsNormalColors
-            ? "Cores normais neste ecrã. O programa guardado será retomado à hora atual."
+            ? "Ajustes do Candlelight suspensos neste ecrã. A Luz noturna do Windows pode continuar ativa. Retomar volta ao programa guardado à hora atual."
             : "";
 
     [ObservableProperty]

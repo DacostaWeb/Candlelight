@@ -1,4 +1,26 @@
-# Wake recovery and remaining hardware verification
+# Wake behavior and hardware verification
+
+## Recommended configuration from 0.6.1
+
+Leave Windows Night Light scheduled from sunset to sunrise and disable both
+experimental Candlelight wake options. The user's physical test confirmed that
+the initial wake image was warm/yellow instead of blue with this configuration.
+This result is specific to the tested Windows 11 PC, not a guarantee for all
+drivers, hibernation modes or monitors.
+
+Version 0.6.1 applies these defaults to new installations and once when upgrading
+older settings, while preserving monitor profiles and solar curves. Disabled
+protection discards old recovery tokens without changing Windows Night Light.
+The Windows schedule and location permissions are configured through Windows
+Settings, opened from the application or the last installer page.
+
+On the tested PC, WinUtil privacy tweaks had disabled location consent, the
+geolocation service and its internal `Service\Configuration\Status` switch.
+After these were restored, a full Windows restart was needed before Night Light
+calculated real solar times instead of 00:00–00:00. Other privacy settings were
+retained. See the [installation guide](install.pt-PT.md) for the specific checks.
+
+## Earlier experiments and implementation history
 
 Candlelight applies current per-monitor targets on `PBT_APMRESUMEAUTOMATIC`,
 `PBT_APMRESUMESUSPEND`, session unlock/connect, display power-on and display

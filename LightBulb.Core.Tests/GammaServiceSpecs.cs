@@ -124,7 +124,7 @@ public class GammaServiceSpecs
         long now = 10000;
         var device = new Device();
         using var service = new GammaService(
-            new SettingsService(),
+            new SettingsService { IsWakeRecoveryEnabled = true },
             () => [Context("internal", device)],
             () => now,
             false
@@ -149,7 +149,7 @@ public class GammaServiceSpecs
         long now = 10000;
         var device = new Device();
         using var service = new GammaService(
-            new SettingsService(),
+            new SettingsService { IsWakeRecoveryEnabled = true },
             () => [Context("oled", device)],
             () => now,
             false
@@ -240,7 +240,7 @@ public class GammaServiceSpecs
         long now = 10000;
         var device = new Device();
         using var service = new GammaService(
-            new SettingsService(),
+            new SettingsService { IsWakeRecoveryEnabled = true },
             () => [Context("internal", device)],
             () => now,
             false,
@@ -268,7 +268,7 @@ public class GammaServiceSpecs
     {
         var device = new Device();
         using var service = new GammaService(
-            new SettingsService(),
+            new SettingsService { IsWakeRecoveryEnabled = true },
             () => [Context("internal", device)],
             () => 10000,
             false,
@@ -279,6 +279,27 @@ public class GammaServiceSpecs
         service.OnDisplayState(1);
         Assert.Empty(device.Writes);
         service.Recover();
+        Assert.Single(device.Writes);
+    }
+
+    [Fact]
+    public void Default_wake_applies_the_profile_without_night_light_delays_or_extra_retries()
+    {
+        long now = 10000;
+        var device = new Device();
+        using var service = new GammaService(
+            new SettingsService(),
+            () => [Context("oled", device)],
+            () => now,
+            false,
+            () => true
+        );
+        service.SetGamma(new(500, 0.25));
+        device.Writes.Clear();
+        service.OnDisplayState(1);
+        Assert.Equal(new GammaColor(0.25, 0, 0), Assert.Single(device.Writes));
+        now += 50;
+        service.RecoveryTick();
         Assert.Single(device.Writes);
     }
 }

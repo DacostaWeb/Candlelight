@@ -74,26 +74,40 @@
           </ListBox.ItemTemplate>
         </ListBox>
         <StackPanel Grid.Row="2" Spacing="12">
-          <TextBlock Text="Ao acordar o PC" FontWeight="SemiBold" />
-          <ToggleSwitch
-            IsChecked="{Binding IsWakeRecoveryEnabled}"
-            Content="Reforçar a reposição"
-            FontSize="13"
-            ToolTip.Tip="Verifica e recupera a cor após a retoma."
-          />
-          <ToggleSwitch
-            x:Name="WakeProtectionSwitch"
-            IsChecked="{Binding IsNightLightProtectionEnabled}"
-            Content="Pausa a preto"
-            FontSize="13"
-            ToolTip.Tip="Usa a Luz noturna na suspensão e cobre os ecrãs durante a reposição, cerca de 1–2 segundos."
-          />
+          <TextBlock Text="Luz noturna do Windows" FontWeight="SemiBold" />
+          <TextBlock Classes="caption" Text="Do pôr ao nascer do sol." />
           <Button
-            Command="{Binding ReapplyCommand}"
-            Content="Reaplicar agora"
+            x:Name="NightLightSettingsButton"
+            Command="{Binding OpenNightLightSettingsCommand}"
+            Content="Configurar Luz noturna"
             HorizontalAlignment="Stretch"
             HorizontalContentAlignment="Center"
+            ToolTip.Tip="Nas definições do Windows, ativa Agendar luz noturna → Do pôr ao nascer do sol."
           />
+          <Expander x:Name="WakeOptions" Header="Opções de retoma" FontSize="13">
+            <StackPanel Spacing="8">
+              <ToggleSwitch
+                IsChecked="{Binding IsWakeRecoveryEnabled}"
+                Content="Reforçar a reposição"
+                FontSize="13"
+                ToolTip.Tip="Verifica e recupera a cor após a retoma. Desligado por defeito."
+              />
+              <ToggleSwitch
+                x:Name="WakeProtectionSwitch"
+                IsChecked="{Binding IsNightLightProtectionEnabled}"
+                IsEnabled="{Binding IsWakeRecoveryEnabled}"
+                Content="Pausa a preto"
+                FontSize="13"
+                ToolTip.Tip="Alternativa experimental: controla a Luz noturna e cobre os ecrãs durante a retoma. Desligado por defeito."
+              />
+              <Button
+                Command="{Binding ReapplyCommand}"
+                Content="Reaplicar agora"
+                HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Center"
+              />
+            </StackPanel>
+          </Expander>
           <TextBlock Classes="caption" Text="{Binding DriverStatus}" Foreground="#E6AF86" />
         </StackPanel>
       </Grid>

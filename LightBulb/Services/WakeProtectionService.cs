@@ -92,6 +92,13 @@ public sealed class WakeProtectionService : IDisposable
             return;
         _initialized = true;
         _originalActive = _nightLight.ReadActive();
+        if (!Enabled)
+        {
+            // A token from an older release must not override Windows' current
+            // Night Light state after switching to the Windows-managed schedule.
+            DeleteRecoveryToken();
+            return;
+        }
         try
         {
             if (_statePath is not null && File.Exists(_statePath))
@@ -279,22 +286,25 @@ public sealed class WakeProtectionService : IDisposable
         _transitionCancellation?.Cancel();
         _failSafe?.Dispose();
         if (_ownsState && _originalActive is { } original && _nightLight.SetActive(original))
-        {
-            if (_statePath is not null)
-            {
-                try
-                {
-                    File.Delete(_statePath);
-                }
-                catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-                {
-                    Diagnostics.ColorTrace.Write(
-                        $"Wake protection state cleanup failed: {error.Message}"
-                    );
-                }
-            }
-        }
+            DeleteRecoveryToken();
         _cover.Dispose();
         _transitionCancellation?.Dispose();
+    }
+
+    private void DeleteRecoveryToken()
+    {
+        if (_statePath is not null)
+        {
+            try
+            {
+                File.Delete(_statePath);
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            {
+                Diagnostics.ColorTrace.Write(
+                    $"Wake protection state cleanup failed: {error.Message}"
+                );
+            }
+        }
     }
 }

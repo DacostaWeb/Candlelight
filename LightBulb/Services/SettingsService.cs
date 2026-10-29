@@ -14,9 +14,14 @@ using Microsoft.Win32;
 namespace LightBulb.Services;
 
 [ObservableObject]
-public partial class SettingsService()
-    : SettingsBase(StartOptions.Current.SettingsPath, SerializerContext.Default)
+public partial class SettingsService : SettingsBase
 {
+    public SettingsService()
+        : this(StartOptions.Current.SettingsPath) { }
+
+    internal SettingsService(string path)
+        : base(path, SerializerContext.Default) { }
+
     private readonly RegistrySwitch<int> _extendedGammaRangeSwitch = new(
         RegistryHive.LocalMachine,
         @"Software\Microsoft\Windows NT\CurrentVersion\ICM",
@@ -73,10 +78,12 @@ public partial class SettingsService()
     public partial string? SelectedDisplayId { get; set; }
 
     [ObservableProperty]
-    public partial bool IsWakeRecoveryEnabled { get; set; } = true;
+    public partial bool IsWakeRecoveryEnabled { get; set; }
 
     [ObservableProperty]
-    public partial bool IsNightLightProtectionEnabled { get; set; } = true;
+    public partial bool IsNightLightProtectionEnabled { get; set; }
+
+    public int WakeSettingsVersion { get; set; }
 
     [ObservableProperty]
     public partial TimeSpan ConfigurationTransitionDuration { get; set; } =
@@ -171,6 +178,7 @@ public partial class SettingsService()
         // Don't reset the first-time experience
         IsFirstTimeExperienceEnabled = false;
         IsUkraineSupportMessageEnabled = false;
+        WakeSettingsVersion = 1;
 
         // Trigger UI updates
         OnPropertyChanged(string.Empty);
@@ -211,6 +219,15 @@ public partial class SettingsService()
     public override bool Load()
     {
         var wasLoaded = base.Load();
+
+        // Older releases enabled the experimental handover by default. Keep
+        // monitor profiles, but let Windows manage its own Night Light schedule.
+        if (WakeSettingsVersion < 1)
+        {
+            IsWakeRecoveryEnabled = false;
+            IsNightLightProtectionEnabled = false;
+            WakeSettingsVersion = 1;
+        }
 
         if (StartOptions.Current.IsPreview)
         {

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using Avalonia.Threading;
@@ -11,6 +12,7 @@ using LightBulb.Core;
 using LightBulb.Framework;
 using LightBulb.PlatformInterop;
 using LightBulb.Services;
+using Process = System.Diagnostics.Process;
 
 namespace LightBulb.ViewModels.Components;
 
@@ -160,10 +162,19 @@ public partial class DisplayControlsViewModel : ViewModelBase
     public partial string SaveStatus { get; set; } = "";
 
     [ObservableProperty]
-    public partial bool IsWakeRecoveryEnabled { get; set; } = true;
+    public partial bool IsWakeRecoveryEnabled { get; set; }
 
     [ObservableProperty]
-    public partial bool IsNightLightProtectionEnabled { get; set; } = true;
+    public partial bool IsNightLightProtectionEnabled { get; set; }
+
+    [RelayCommand]
+    private void OpenNightLightSettings()
+    {
+        if (!StartOptions.Current.IsPreview)
+            Process.Start(
+                new ProcessStartInfo("ms-settings:nightlight") { UseShellExecute = true }
+            );
+    }
 
     public string PreviewNotice =>
         StartOptions.Current.IsPreview ? "Pré-visualização · os ecrãs não são alterados" : "";

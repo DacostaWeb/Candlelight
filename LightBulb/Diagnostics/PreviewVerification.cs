@@ -30,6 +30,18 @@ internal static class PreviewVerification
                 "UI verification did not resume on the UI thread."
             );
             var controls = model.Dashboard.Displays;
+            Require(
+                !controls.IsWakeRecoveryEnabled && !controls.IsNightLightProtectionEnabled,
+                "Fresh settings must leave Windows Night Light in control."
+            );
+            var nightLightSettings = window
+                .GetVisualDescendants()
+                .OfType<Button>()
+                .Single(button => button.Name == "NightLightSettingsButton");
+            Require(
+                nightLightSettings.Command is not null,
+                "The Windows Night Light settings button did not bind."
+            );
             Require(controls.Displays.Count == 2, "Two preview displays were not discovered.");
             controls.SelectedDisplay = controls.Displays[0];
             controls.ApplyPreset(controls.Presets.First(p => p.Id == "day"));
@@ -244,6 +256,13 @@ internal static class PreviewVerification
             await Task.Delay(150);
             Capture(window, directory, "solar-settings.png");
             controls.SaveNow();
+            window
+                .GetVisualDescendants()
+                .OfType<Expander>()
+                .Single(expander => expander.Name == "WakeOptions")
+                .IsExpanded = true;
+            controls.IsWakeRecoveryEnabled = true;
+            await Task.Delay(150);
             var protection = window
                 .GetVisualDescendants()
                 .OfType<ToggleSwitch>()
@@ -258,6 +277,8 @@ internal static class PreviewVerification
                 controls.IsNightLightProtectionEnabled,
                 "Wake protection toggle did not enable the setting."
             );
+            protection.SetCurrentValue(ToggleSwitch.IsCheckedProperty, false);
+            controls.IsWakeRecoveryEnabled = false;
             var shield = Services.BlackoutCover.CreateWindow();
             try
             {

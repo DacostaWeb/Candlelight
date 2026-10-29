@@ -89,6 +89,7 @@ public class WakeProtectionSpecs
 
         public Fixture(string? statePath = null, bool enabled = true, bool initiallyOn = false)
         {
+            Settings.IsWakeRecoveryEnabled = enabled;
             Settings.IsNightLightProtectionEnabled = enabled;
             Light = new(Events) { Active = initiallyOn };
             Cover = new(Events);
@@ -257,6 +258,32 @@ public class WakeProtectionSpecs
         f.Gamma.OnDisplayState(0);
         f.Gamma.OnDisplayState(1);
         Assert.DoesNotContain(f.Events, e => e.StartsWith("cover:") || e.StartsWith("light:"));
+    }
+
+    [Fact]
+    public async Task Disabled_protection_discards_old_tokens_without_changing_windows_night_light()
+    {
+        var path = Path.Combine(
+            Path.GetTempPath(),
+            "candlelight-guard-" + Guid.NewGuid() + ".state"
+        );
+        File.WriteAllText(path, "off");
+        try
+        {
+            using var f = new Fixture(path, enabled: false, initiallyOn: true);
+            f.Protection.Initialize();
+            f.Gamma.OnDisplayState(0);
+            f.Gamma.OnDisplayState(1);
+            await f.Protection.PendingTransition;
+            f.Protection.Dispose();
+            Assert.True(f.Light.Active);
+            Assert.False(File.Exists(path));
+            Assert.DoesNotContain(f.Events, e => e.StartsWith("light:") || e == "cover:shown");
+        }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 
     [Fact]

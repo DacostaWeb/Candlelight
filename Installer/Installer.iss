@@ -51,6 +51,8 @@ portuguese.DesktopShortcut=Criar atalho no ambiente de trabalho
 portuguese.AutoStart=Iniciar com o Windows
 english.DesktopShortcut=Create a desktop shortcut
 english.AutoStart=Start with Windows
+portuguese.ConfigureNightLight=Configurar a Luz noturna do Windows (recomendado)
+english.ConfigureNightLight=Set up Windows Night Light (recommended)
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:DesktopShortcut}"
@@ -72,6 +74,7 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 
 [Run]
 Filename: "{app}\Candlelight.exe"; Description: "{cm:LaunchProgram,{#StringChange(AppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+Filename: "ms-settings:nightlight"; Description: "{cm:ConfigureNightLight}"; Flags: shellexec nowait postinstall skipifsilent
 
 [UninstallDelete]
 Type: files; Name: "{app}\ColorStatus.txt"

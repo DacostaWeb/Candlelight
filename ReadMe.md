@@ -2,22 +2,35 @@
 
 <p><img src="favicon.png" width="96" height="96" alt="Candlelight candle icon" /></p>
 
-A Windows fork of [LightBulb](https://github.com/Tyrrrz/LightBulb) with independent
-color temperature, brightness and schedules for each monitor.
+Uma versão para Windows baseada no [LightBulb](https://github.com/Tyrrrz/LightBulb),
+com temperatura de cor, brilho e transições solares independentes para cada monitor.
 
-**Version 0.6.0** adds daily solar transitions with editable curves to the
-LightBulb-based engine and independent monitor controls. Each monitor has a
-**Cores normais** button that preserves its program for later resumption.
+**[⬇ Descarregar o instalador Windows](https://github.com/DacostaWeb/Candlelight/releases/latest/download/Candlelight-Setup-win-x64.exe)**
+
+[Versão portátil ZIP](https://github.com/DacostaWeb/Candlelight/releases/latest/download/Candlelight-win-x64.zip)
+· [Guia de instalação](docs/install.pt-PT.md)
+· [Todas as versões](https://github.com/DacostaWeb/Candlelight/releases)
+
+**Versão 0.6.1:** mantém a Luz noturna sob controlo do Windows e traz os ajustes
+experimentais de despertar desligados por defeito. As curvas solares e os
+controlos separados por monitor continuam disponíveis.
 
 ![Candlelight interface](docs/interface.png)
 
-## Install
+## Instalar em qualquer PC compatível
 
-Download **Candlelight-0.6.0-Setup-win-x64.exe** from
-[the latest release](https://github.com/DacostaWeb/Candlelight/releases/latest).
-Run it, choose whether to create a desktop shortcut and start with Windows, then
-open Candlelight. The installer supports Windows 10 (build 19041+) and Windows 11
-on x64-compatible PCs. It includes the .NET runtime and works offline.
+1. Descarrega e executa **Candlelight-Setup-win-x64.exe**.
+2. Mantém **Iniciar com o Windows** e, no fim, **Configurar a Luz noturna do Windows** selecionados.
+3. Nas Definições do Windows, ativa **Agendar luz noturna → Do pôr ao nascer do sol** e escolhe a intensidade.
+4. No Candlelight, escolhe a tua cidade e ajusta cada ecrã. Para o OLED, podes usar **500 K / 25%** à noite; no interno, **500 K / 100%**.
+
+Suporta **Windows 10 (19041+) e Windows 11, x64**. Inclui o .NET e pode ser
+instalado offline depois do download. Não precisa de serviços ou certificados
+adicionais. O instalador não altera permissões de localização automaticamente.
+
+Se o Windows mostrar **00:00–00:00**, vê o [guia de localização e tweaks de
+privacidade](docs/install.pt-PT.md#luz-noturna-e-privacidade). O Candlelight tem
+um botão **Configurar Luz noturna** para voltar a essa página a qualquer momento.
 
 Installation is per-user in `%LOCALAPPDATA%\Programs\Candlelight`. Settings are
 stored in `%APPDATA%\Candlelight\Settings.json`. Installing over a portable copy
@@ -56,9 +69,12 @@ Portable settings stay beside the executable. Close other gamma tools first.
 - Physical monitor identity can retain profiles between HDMI and USB-C if the
   monitor reports the same serial on both connections.
 
-This version targets SDR monitors on an extended desktop. Wake recovery and the
-optional **Pausa a preto** guard are retained, but eliminating every white/blue
-flash on resume is not guaranteed. See [the hardware findings](docs/wake-recovery.md).
+This version targets SDR monitors on an extended desktop. Windows Night Light
+with a sunset-to-sunrise schedule is the recommended wake configuration. The user
+confirmed that the initial wake flash became warm/yellow on the tested PC.
+Experimental wake recovery and **Pausa a preto** are off by default, including on
+the first upgrade from older versions. They remain under **Opções de retoma**.
+Hardware results vary; see [the hardware findings](docs/wake-recovery.md).
 
 ## Build and verify
 
@@ -70,7 +86,7 @@ dotnet test LightBulb.Core.Tests --configuration Release --no-build
 dotnet LightBulb/bin/Release/net10.0-windows/Candlelight.dll --preview --capture-preview=artifacts/ui
 ./scripts/publish.ps1
 ./scripts/build-installer.ps1
-./scripts/verify-installer.ps1 -InstallerPath artifacts/release/Candlelight-0.6.0-Setup-win-x64.exe
+./scripts/verify-installer.ps1 -InstallerPath artifacts/release/Candlelight-0.6.1-Setup-win-x64.exe
 ```
 
 Installer verification runs on a machine without an installed/running Candlelight.
@@ -78,6 +94,8 @@ It checks installation, the included runtime, real compiled UI controls, repeat
 installation, uninstall, settings preservation and startup isolation. Preview
 mode uses synthetic displays and does not change screen colors or autostart.
 CI publishes both an installer and a portable ZIP, without personal settings.
+Pushing a version tag publishes the downloads and SHA256 checksums only after
+all verification steps pass. Release notes live in `docs/releases/<version>.md`.
 
 `--list-displays` and `--diagnose-displays=report.txt` inspect monitors read-only.
 `CANDLELIGHT_SETTINGS_PATH` can override the settings location. Automatic upstream
