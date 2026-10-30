@@ -215,6 +215,32 @@ public class GammaRampWriterSpecs
         Assert.False(writer.IsCurrent(expected));
     }
 
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    public void An_unreadable_output_is_not_written_through_either_backend(
+        bool readColor,
+        bool readGdi
+    )
+    {
+        var api = new Api { CanReadColor = readColor, CanReadGdi = readGdi };
+        var writer = new GammaRampWriter(api);
+        Assert.False(writer.Apply(GammaRamp.Create(0.25, 0, 0, 0)));
+        Assert.Empty(api.Writes);
+        Assert.False(writer.DidWrite);
+        Assert.NotNull(writer.FailureReason);
+    }
+
+    [Fact]
+    public void Systems_without_the_internal_color_api_can_still_use_readable_gdi()
+    {
+        var api = new Api { IsColorSystemAvailable = false, CanReadColor = false };
+        var writer = new GammaRampWriter(api);
+        Assert.True(writer.Apply(GammaRamp.Create(1, 0.8, 0.6, 0)));
+        Assert.Equal(["gdi"], api.Writes);
+    }
+
     [Fact]
     public void A_non_neutral_gdi_layer_is_cleared_after_the_color_filter_is_installed()
     {

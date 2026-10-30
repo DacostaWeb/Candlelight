@@ -43,6 +43,12 @@ public sealed class GammaService : IDisposable
     private readonly Dictionary<string, ColorConfiguration> _applied = new(
         StringComparer.OrdinalIgnoreCase
     );
+
+    // A failed write must not become a 20 Hz retry loop. Keep this latch across
+    // context recreation and power events; only an explicit retry clears it.
+    private readonly Dictionary<string, string> _suspendedDisplays = new(
+        StringComparer.OrdinalIgnoreCase
+    );
     private ColorConfiguration _fallback = ColorConfiguration.Default;
     private string? _lastTrace;
 
@@ -272,6 +278,8 @@ public sealed class GammaService : IDisposable
             if (_isDisposed || _isUpdating || _isRecovering)
                 return;
             _isRecovering = true;
+            if (reason == "requested")
+                _suspendedDisplays.Clear();
             wasProtectedHandover = _protectedHandover;
             _displayOff = false;
             _contextsValid = false;
@@ -349,15 +357,15 @@ public sealed class GammaService : IDisposable
 
     internal void WatchdogTick()
     {
-        // Independent of UI timers and foreground changes. Readback checks do
-        // not rewrite matching LUTs, so an external reset can be repaired while
-        // the application stays in the tray without fighting a stable filter.
+        // Continuous repair is opt-in. In particular, the default configuration
+        // must not keep competing with Windows Night Light in the background.
         if (!System.Threading.Monitor.TryEnter(_sync))
             return;
         try
         {
             if (
                 _isDisposed
+                || !_settings.IsGammaPollingEnabled
                 || !_hasRequest
                 || _displayOff
                 || _protectedHandover
@@ -464,6 +472,13 @@ public sealed class GammaService : IDisposable
         {
             foreach (var context in _contexts)
             {
+                if (_suspendedDisplays.TryGetValue(context.Info.Id, out var suspendedReason))
+                {
+                    failures.Add(context.Info.Id);
+                    reasons[context.Info.Id] = suspendedReason;
+                    trace.Append($"{context.Info.Name}: suspended; ");
+                    continue;
+                }
                 var config = _requested.TryGetValue(context.Info.Id, out var value)
                     ? value
                     : _fallback;
@@ -494,7 +509,12 @@ public sealed class GammaService : IDisposable
                 {
                     failures.Add(context.Info.Id);
                     reasons[context.Info.Id] =
-                        context.Device.FailureReason ?? "O driver recusou os valores pedidos.";
+                        (context.Device.FailureReason ?? "O driver recusou os valores pedidos.")
+                        + " Ajustes suspensos para evitar flashes. Usa Reaplicar agora para tentar novamente.";
+                    _suspendedDisplays[context.Info.Id] = reasons[context.Info.Id];
+                    Diagnostics.ColorTrace.Write(
+                        $"Color suspended [{context.Info.Name}]: {reasons[context.Info.Id]}"
+                    );
                     _applied.Remove(context.Info.Id);
                 }
             }
@@ -531,7 +551,9 @@ public sealed class GammaService : IDisposable
             _watchdogTimer.Dispose();
             foreach (var context in _contexts)
             {
-                context.Device.ResetGamma();
+                // Leave an unavailable/contested output alone, including at exit.
+                if (!_suspendedDisplays.ContainsKey(context.Info.Id))
+                    context.Device.ResetGamma();
                 context.Device.Dispose();
             }
         }

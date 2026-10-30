@@ -192,21 +192,80 @@ public class GammaServiceSpecs
     }
 
     [Fact]
-    public void A_driver_failure_is_reported_and_retried()
+    public void A_driver_failure_stops_all_automatic_writes_until_explicit_retry()
     {
         var device = new Device { Succeeds = false };
+        long now = 10000;
         using var service = new GammaService(
-            new SettingsService(),
+            new SettingsService { IsGammaPollingEnabled = true, IsWakeRecoveryEnabled = true },
             () => [Context("oled", device)],
-            () => 10000,
+            () => now,
             false
         );
         service.SetGamma(new(500, 0.15));
         Assert.Contains("oled", service.FailedDisplayIds);
+        Assert.Contains("suspensos", service.FailureReasons["oled"]);
+        for (var i = 0; i < 200; i++)
+        {
+            now += 50;
+            service.SetGamma(new(500 + i, 0.15));
+            service.WatchdogTick();
+            service.RecoveryTick();
+            service.InvalidateGamma();
+            service.InvalidateDeviceContexts();
+            service.OnDisplayState(1);
+            Assert.False(service.ApplyProtectedProfile());
+        }
+        Assert.Single(device.Writes);
         device.Succeeds = true;
         service.SetGamma(new(500, 0.15));
+        Assert.Single(device.Writes);
+        service.Recover();
         Assert.Empty(service.FailedDisplayIds);
         Assert.Equal(2, device.Writes.Count);
+    }
+
+    [Fact]
+    public void A_failed_display_does_not_block_healthy_monitors_or_get_reset_on_exit()
+    {
+        var failed = new Device { Succeeds = false };
+        var healthy = new Device();
+        using (
+            var service = new GammaService(
+                new SettingsService(),
+                () => [Context("failed", failed), Context("healthy", healthy)],
+                () => 10000,
+                false
+            )
+        )
+        {
+            service.SetGamma(new(500, 0.25));
+            service.SetGamma(new(2700, 1));
+            Assert.Single(failed.Writes);
+            Assert.Equal(2, healthy.Writes.Count);
+            Assert.Equal(["failed"], service.FailedDisplayIds);
+        }
+        Assert.Equal(0, failed.Resets);
+        Assert.Equal(1, healthy.Resets);
+    }
+
+    [Fact]
+    public void Default_background_watchdog_does_not_repair_external_changes()
+    {
+        var device = new Device();
+        using var service = new GammaService(
+            new SettingsService(),
+            () => [Context("internal", device)],
+            () => 10000,
+            false
+        );
+        service.SetGamma(new(2700, 1));
+        device.Writes.Clear();
+        var checks = device.Verifications;
+        for (var i = 0; i < 100; i++)
+            service.WatchdogTick();
+        Assert.Empty(device.Writes);
+        Assert.Equal(checks, device.Verifications);
     }
 
     [Fact]
@@ -214,7 +273,7 @@ public class GammaServiceSpecs
     {
         var device = new Device();
         using var service = new GammaService(
-            new SettingsService(),
+            new SettingsService { IsGammaPollingEnabled = true },
             () => [Context("internal", device)],
             () => 10000,
             false

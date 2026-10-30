@@ -11,9 +11,10 @@ com temperatura de cor, brilho e transições solares independentes para cada mo
 · [Guia de instalação](docs/install.pt-PT.md)
 · [Todas as versões](https://github.com/DacostaWeb/Candlelight/releases)
 
-**Versão 0.6.1:** mantém a Luz noturna sob controlo do Windows e traz os ajustes
-experimentais de despertar desligados por defeito. As curvas solares e os
-controlos separados por monitor continuam disponíveis.
+**Versão 0.6.2:** corrige um ciclo de tentativas que podia provocar flashes
+contínuos quando o Windows recusava os ajustes de cor. O monitor afetado passa
+a ficar suspenso até uma tentativa manual. Mantém a Luz noturna sob controlo
+do Windows e os controlos separados por monitor.
 
 ![Candlelight interface](docs/interface.png)
 
@@ -86,7 +87,7 @@ dotnet test LightBulb.Core.Tests --configuration Release --no-build
 dotnet LightBulb/bin/Release/net10.0-windows/Candlelight.dll --preview --capture-preview=artifacts/ui
 ./scripts/publish.ps1
 ./scripts/build-installer.ps1
-./scripts/verify-installer.ps1 -InstallerPath artifacts/release/Candlelight-0.6.1-Setup-win-x64.exe
+./scripts/verify-installer.ps1 -InstallerPath artifacts/release/Candlelight-0.6.2-Setup-win-x64.exe
 ```
 
 Installer verification runs on a machine without an installed/running Candlelight.

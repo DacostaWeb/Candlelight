@@ -1,5 +1,29 @@
 # Wake behavior and hardware verification
 
+## Continuous-flash incident and 0.6.2 fix
+
+On 2026-10-30 the user reported continuous blue flashes. Stopping Candlelight
+stopped them. The retained log shows unsuccessful writes approximately 24 times
+per second: a 50 ms UI timer retried each failed target and a separate 250 ms
+watchdog kept running even though gamma polling was disabled. Color-system
+readback was unavailable. The incident was near sunset, but the log does not
+establish what first made the output unavailable.
+
+Version 0.6.2 checks readback before writing, suspends a monitor after any failed
+application, and keeps it suspended across UI ticks, profile changes, context
+recreation, power notifications and shutdown. Only explicit **Reaplicar agora**
+or restarting the app permits a new attempt. Other monitors continue normally.
+The background repair timer now respects the existing gamma-polling setting,
+which is off by default. These changes do not toggle Windows Night Light.
+
+Regression tests simulate the unavailable output and repeated automatic events
+without programming real displays. They verify zero native writes when readback
+is unavailable and no further writes after a reported application failure.
+
+Windows documents that gamma ramps can be overwritten by display events or
+other software and can interact unpredictably with color calibration:
+[SetDeviceGammaRamp documentation](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-setdevicegammaramp).
+
 ## Recommended configuration from 0.6.1
 
 Leave Windows Night Light scheduled from sunset to sunrise and disable both

@@ -40,6 +40,13 @@ No PC testado, a correção da localização e o reinício permitiram ao Windows
 
 ## Atualizar, remover ou usar sem instalar
 
+A versão 0.6.2 corrige tentativas contínuas após uma falha do Windows ao aplicar
+a cor. Se aparecer **Ajustes suspensos para evitar flashes**, o Candlelight
+deixa de escrever nesse monitor. Os restantes mantêm os seus ajustes. Quando
+o ecrã estiver estável, **Opções de retoma → Reaplicar agora** faz uma nova
+tentativa. Se voltar a falhar, fica suspenso novamente. Alterar curvas ou acordar
+o PC não reinicia esse ciclo; os perfis guardados são preservados.
+
 Instala a versão nova por cima da anterior: os monitores, curvas, horários e presets são preservados. Na primeira atualização para 0.6.1, os dois ajustes experimentais de retoma ficam desligados. Mantêm-se em **Opções de retoma** para quem os quiser ativar explicitamente.
 
 Os dados ficam em `%APPDATA%\Candlelight\Settings.json`. A desinstalação em **Definições → Aplicações → Candlelight** mantém esses dados. A versão ZIP guarda as definições junto de `Candlelight.exe`; fecha outras cópias antes de a executar.

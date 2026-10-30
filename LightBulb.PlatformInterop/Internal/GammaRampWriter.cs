@@ -50,13 +50,25 @@ internal sealed class GammaRampWriter(IGammaRampApi api, bool useColorSystem = f
     public bool Apply(GammaRamp ramp)
     {
         FailureReason = null;
-        DidWrite = true;
+        DidWrite = false;
         // The LUT can outlive a process or have been applied by a diagnostic
         // helper. GDI readback alone cannot see that independent color layer.
         var existingColor = default(GammaRamp);
         var colorReadable = api.IsColorSystemAvailable && api.ReadColorSystem(out existingColor);
         LastOperation = $"color before={Summary(colorReadable, existingColor)}";
+        // An unavailable readback can mean a stale display context or a driver
+        // transition. Do not try either write API while we cannot verify it.
+        if (
+            ((api.IsColorSystemAvailable || UsesColorSystem) && !colorReadable)
+            || !api.ReadGdi(out _)
+        )
+        {
+            FailureReason = "O Windows não permite verificar a cor deste ecrã neste momento.";
+            LastOperation += "; readback unavailable; write skipped";
+            return false;
+        }
         var activeColorLayer = colorReadable && !GammaRamp.Identity().Matches(existingColor);
+        DidWrite = true;
         if (!UsesColorSystem && !activeColorLayer)
         {
             if (api.WriteGdi(ref ramp) && api.ReadGdi(out var actual) && ramp.Matches(actual))
