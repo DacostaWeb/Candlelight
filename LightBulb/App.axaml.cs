@@ -52,6 +52,7 @@ public partial class App : Application, IDisposable
         services.AddTransient<MainViewModel>();
         services.AddSingleton<DashboardViewModel>();
         services.AddSingleton<DisplayControlsViewModel>();
+        services.AddSingleton<UpdatesViewModel>();
         services.AddTransient<MessageBoxViewModel>();
         services.AddTransient<SettingsViewModel>();
         services.AddTransient<SettingsTabViewModelBase, AdvancedSettingsTabViewModel>();
@@ -123,6 +124,7 @@ public partial class App : Application, IDisposable
         };
 
         _ = _mainViewModel.Dashboard.InitializeAsync();
+        _ = _mainViewModel.Updates.InitializeAsync();
 
         // Initialize the lifetime
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
@@ -244,6 +246,16 @@ public partial class App : Application, IDisposable
 
 public partial class App
 {
+    internal static void ShutdownForUpdate()
+    {
+        if (Current is not { } app)
+            return;
+        app._mainViewModel.Dashboard.Displays.SaveNow();
+        app._settingsService.Save();
+        app._services.GetRequiredService<GammaService>().PreserveGammaOnExit();
+        Shutdown();
+    }
+
     public static void Shutdown(int exitCode = 0)
     {
         if (Current?.ApplicationLifetime?.TryShutdown(exitCode) != true)

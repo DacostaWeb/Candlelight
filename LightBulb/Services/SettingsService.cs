@@ -125,7 +125,7 @@ public partial class SettingsService : SettingsBase
     public partial bool IsAutoStartEnabled { get; set; }
 
     [ObservableProperty]
-    public partial bool IsAutoUpdateEnabled { get; set; }
+    public partial bool IsAutoUpdateEnabled { get; set; } = true;
 
     [ObservableProperty]
     public partial bool IsDefaultToDayConfigurationEnabled { get; set; }

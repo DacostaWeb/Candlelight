@@ -11,10 +11,10 @@ com temperatura de cor, brilho e transições solares independentes para cada mo
 · [Guia de instalação](docs/install.pt-PT.md)
 · [Todas as versões](https://github.com/DacostaWeb/Candlelight/releases)
 
-**Versão 0.6.2:** corrige um ciclo de tentativas que podia provocar flashes
-contínuos quando o Windows recusava os ajustes de cor. O monitor afetado passa
-a ficar suspenso até uma tentativa manual. Mantém a Luz noturna sob controlo
-do Windows e os controlos separados por monitor.
+**Versão 0.6.3:** mostra a versão instalada e permite procurar e instalar
+atualizações diretamente na janela principal. A procura automática é opcional;
+a instalação começa apenas quando clicares. Mantém a correção de flashes
+da 0.6.2, a Luz noturna e os controlos separados por monitor.
 
 ![Candlelight interface](docs/interface.png)
 
@@ -87,7 +87,7 @@ dotnet test LightBulb.Core.Tests --configuration Release --no-build
 dotnet LightBulb/bin/Release/net10.0-windows/Candlelight.dll --preview --capture-preview=artifacts/ui
 ./scripts/publish.ps1
 ./scripts/build-installer.ps1
-./scripts/verify-installer.ps1 -InstallerPath artifacts/release/Candlelight-0.6.2-Setup-win-x64.exe
+./scripts/verify-installer.ps1 -InstallerPath artifacts/release/Candlelight-0.6.3-Setup-win-x64.exe
 ```
 
 Installer verification runs on a machine without an installed/running Candlelight.
@@ -99,8 +99,11 @@ Pushing a version tag publishes the downloads and SHA256 checksums only after
 all verification steps pass. Release notes live in `docs/releases/<version>.md`.
 
 `--list-displays` and `--diagnose-displays=report.txt` inspect monitors read-only.
-`CANDLELIGHT_SETTINGS_PATH` can override the settings location. Automatic upstream
-updates are disabled for this fork.
+`CANDLELIGHT_SETTINGS_PATH` can override the settings location. Updates only use
+stable releases of `DacostaWeb/Candlelight`. Automatic checks run at startup and
+every three hours; installation requires clicking the main-window button.
+`CANDLELIGHT_ALLOW_AUTO_UPDATE=false` disables both manual and automatic checks.
+Preview mode does not contact GitHub, download files or launch an installer.
 
 ## Credits
 

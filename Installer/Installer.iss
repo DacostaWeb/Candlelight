@@ -69,6 +69,11 @@ Source: "{app}\NightLightGuard.state"; DestDir: "{userappdata}\Candlelight"; Fla
 Name: "{group}\{#AppName}"; Filename: "{app}\Candlelight.exe"; IconFilename: "{app}\Candlelight.exe"
 Name: "{autodesktop}\Candlelight"; Filename: "{app}\Candlelight.exe"; IconFilename: "{app}\Candlelight.exe"; Tasks: desktopicon
 
+[InstallDelete]
+; Replaced by the installer-based updater in 0.6.3.
+Type: files; Name: "{app}\Onova.dll"
+Type: files; Name: "{app}\Onova.pdb"
+
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Candlelight"; ValueData: """{app}\Candlelight.exe"" --start-hidden"; Tasks: autostart; Flags: uninsdeletevalue
 

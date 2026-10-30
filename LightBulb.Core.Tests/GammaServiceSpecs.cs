@@ -269,6 +269,26 @@ public class GammaServiceSpecs
     }
 
     [Fact]
+    public void An_update_handoff_keeps_the_applied_color_on_exit()
+    {
+        var device = new Device();
+        using (
+            var service = new GammaService(
+                new SettingsService(),
+                () => [Context("internal", device)],
+                () => 10000,
+                false
+            )
+        )
+        {
+            service.SetGamma(new(500, 1));
+            service.PreserveGammaOnExit();
+        }
+        Assert.Single(device.Writes);
+        Assert.Equal(0, device.Resets);
+    }
+
+    [Fact]
     public void Background_watchdog_repairs_an_external_reset_without_ui_ticks()
     {
         var device = new Device();

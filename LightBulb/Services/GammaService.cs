@@ -31,6 +31,7 @@ public sealed class GammaService : IDisposable
     private bool _isUpdating;
     private bool _isRecovering;
     private bool _isDisposed;
+    private bool _preserveGammaOnExit;
     private bool _displayOff;
     private bool _hasRequest;
     private bool _protectedHandover;
@@ -539,6 +540,12 @@ public sealed class GammaService : IDisposable
         }
     }
 
+    internal void PreserveGammaOnExit()
+    {
+        lock (_sync)
+            _preserveGammaOnExit = true;
+    }
+
     public void Dispose()
     {
         _events.Dispose();
@@ -552,7 +559,7 @@ public sealed class GammaService : IDisposable
             foreach (var context in _contexts)
             {
                 // Leave an unavailable/contested output alone, including at exit.
-                if (!_suspendedDisplays.ContainsKey(context.Info.Id))
+                if (!_preserveGammaOnExit && !_suspendedDisplays.ContainsKey(context.Info.Id))
                     context.Device.ResetGamma();
                 context.Device.Dispose();
             }

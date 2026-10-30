@@ -10,6 +10,10 @@
   <ItemGroup>
     <AvaloniaResource Include="../favicon.ico" Link="favicon.ico" />
     <InternalsVisibleTo Include="LightBulb.Core.Tests" />
+    <EmbeddedResource
+      Include="Services/InstallUpdate.ps1"
+      LogicalName="Candlelight.InstallUpdate.ps1"
+    />
   </ItemGroup>
 
   <ItemGroup>
@@ -24,7 +28,6 @@
     <PackageReference Include="Material.Avalonia" />
     <PackageReference Include="Material.Icons.Avalonia" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
-    <PackageReference Include="Onova" />
     <PackageReference Include="PowerKit" />
   </ItemGroup>
 

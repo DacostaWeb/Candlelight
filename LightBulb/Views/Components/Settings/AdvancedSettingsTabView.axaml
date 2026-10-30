@@ -61,12 +61,12 @@
     <Grid
       ColumnDefinitions="*,Auto"
       IsVisible="{Binding IsAutoUpdateAllowed}"
-      ToolTip.Tip="{Binding LocalizationManager.AutoUpdateTooltip}"
+      ToolTip.Tip="Procura ao abrir e de 3 em 3 horas. A instalação começa apenas quando clicares na janela principal."
     >
       <TextBlock
         Grid.Column="0"
         VerticalAlignment="Center"
-        Text="{Binding LocalizationManager.AutoUpdateLabel}"
+        Text="Procurar atualizações automaticamente"
         TextTrimming="CharacterEllipsis"
       />
       <ToggleSwitch Grid.Column="1" IsChecked="{Binding IsAutoUpdateEnabled}" />

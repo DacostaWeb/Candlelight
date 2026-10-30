@@ -40,6 +40,16 @@ No PC testado, a correção da localização e o reinício permitiram ao Windows
 
 ## Atualizar, remover ou usar sem instalar
 
+Desde a **0.6.3**, o rodapé mostra a versão instalada e o botão **Procurar
+atualizações**. Com **Procurar automaticamente** ligado, verifica ao abrir
+(mesmo na bandeja) e de três em três horas. O botão passa a **Instalar [versão]**
+quando há uma atualização. Só depois desse clique descarrega, verifica, instala
+e reabre a aplicação, preservando os teus perfis e a preferência de arranque.
+
+Instala a 0.6.3 uma vez em cada PC para obter estes controlos. A opção automática
+vem ligada em instalações novas e mantém a preferência existente em atualizações.
+Na versão portátil, o botão abre os downloads para atualização manual.
+
 A versão 0.6.2 corrige tentativas contínuas após uma falha do Windows ao aplicar
 a cor. Se aparecer **Ajustes suspensos para evitar flashes**, o Candlelight
 deixa de escrever nesse monitor. Os restantes mantêm os seus ajustes. Quando

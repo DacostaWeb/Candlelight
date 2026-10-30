@@ -30,6 +30,30 @@ internal static class PreviewVerification
                 "UI verification did not resume on the UI thread."
             );
             var controls = model.Dashboard.Displays;
+            var updateButton = window
+                .GetVisualDescendants()
+                .OfType<Button>()
+                .Single(button => button.Name == "UpdateButton");
+            var automaticUpdates = window
+                .GetVisualDescendants()
+                .OfType<CheckBox>()
+                .Single(check => check.Name == "AutomaticUpdatesCheckBox");
+            Require(
+                updateButton.Command == model.Updates.UpdateCommand,
+                "The update button did not bind to its command."
+            );
+            automaticUpdates.SetCurrentValue(CheckBox.IsCheckedProperty, false);
+            Require(
+                !model.Updates.IsAutoUpdateEnabled,
+                "Automatic update preference did not bind."
+            );
+            await model.Updates.UpdateCommand.ExecuteAsync(null);
+            Require(
+                model.Updates.UpdateStatus.Contains("mais recente"),
+                "Manual update checks must work when automatic checks are disabled."
+            );
+            automaticUpdates.SetCurrentValue(CheckBox.IsCheckedProperty, true);
+            Require(model.Updates.IsAutoUpdateEnabled, "Automatic checks did not re-enable.");
             Require(
                 !controls.IsWakeRecoveryEnabled && !controls.IsNightLightProtectionEnabled,
                 "Fresh settings must leave Windows Night Light in control."

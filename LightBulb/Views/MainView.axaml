@@ -59,24 +59,57 @@
         BorderBrush="{DynamicResource CandlelightLine}"
         BorderThickness="0,1,0,0"
       >
-        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="16">
-          <TextBlock
-            Text="{Binding Dashboard.Instant, StringFormat={}{0:HH:mm}}"
-            Foreground="{DynamicResource CandlelightMuted}"
-            VerticalAlignment="Center"
-          />
-          <ToggleButton
-            Grid.Column="1"
-            Content="Antever o dia"
-            IsChecked="{Binding Dashboard.IsCyclePreviewEnabled}"
-            Padding="14,10"
-          />
-          <Button
-            Grid.Column="2"
-            Content="Definições avançadas"
-            Command="{Binding ShowSettingsCommand}"
-            Padding="14,10"
-          />
+        <Grid RowDefinitions="Auto,Auto" RowSpacing="10">
+          <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="16">
+            <StackPanel VerticalAlignment="Center" Spacing="2">
+              <TextBlock Text="{Binding Updates.VersionLabel}" FontWeight="SemiBold" />
+              <TextBlock
+                x:Name="UpdateStatusText"
+                Text="{Binding Updates.UpdateStatus}"
+                TextTrimming="CharacterEllipsis"
+                FontSize="12"
+                ToolTip.Tip="{Binding Updates.UpdateStatus}"
+                Foreground="{DynamicResource CandlelightMuted}"
+              />
+            </StackPanel>
+            <CheckBox
+              x:Name="AutomaticUpdatesCheckBox"
+              Grid.Column="1"
+              IsChecked="{Binding Updates.IsAutoUpdateEnabled}"
+              IsEnabled="{Binding Updates.IsUpdateAllowed}"
+              Content="Procurar automaticamente"
+              VerticalAlignment="Center"
+              ToolTip.Tip="Procura ao abrir e de 3 em 3 horas. Só instala quando clicares."
+            />
+            <Button
+              x:Name="UpdateButton"
+              Grid.Column="2"
+              Content="{Binding Updates.UpdateButtonText}"
+              Command="{Binding Updates.UpdateCommand}"
+              Padding="14,10"
+              VerticalAlignment="Center"
+              MinWidth="170"
+            />
+          </Grid>
+          <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="16">
+            <TextBlock
+              Text="{Binding Dashboard.Instant, StringFormat={}{0:HH:mm}}"
+              Foreground="{DynamicResource CandlelightMuted}"
+              VerticalAlignment="Center"
+            />
+            <ToggleButton
+              Grid.Column="1"
+              Content="Antever o dia"
+              IsChecked="{Binding Dashboard.IsCyclePreviewEnabled}"
+              Padding="14,10"
+            />
+            <Button
+              Grid.Column="2"
+              Content="Definições avançadas"
+              Command="{Binding ShowSettingsCommand}"
+              Padding="14,10"
+            />
+          </Grid>
         </Grid>
       </Border>
     </Grid>
