@@ -1,5 +1,28 @@
 # Wake behavior and hardware verification
 
+## Successful writes during Night Light transitions
+
+On 2026-11-06 the user reported alternating warm and normal colors after waking
+the PC during the morning transition, with 0.6.3 installed. Unlike the earlier
+failed-write incident, the log records successful warm writes followed by
+different color-system values before the next write. This establishes external
+replacement of verified ramps and is consistent with the Windows Night Light
+fade; the log alone does not identify the component performing those writes.
+
+The gamma writer now detects replacement of its last verified output and waits
+without writing until both readable layers remain unchanged for three seconds.
+It then applies the latest requested target. The wait survives device-context
+recreation, remains active if a fade momentarily crosses the requested value,
+and does not suspend unrelated monitors. Waiting monitors also remain untouched
+on exit. Actual read/write failures retain the existing explicit-retry behavior.
+Windows Night Light settings and schedules are unchanged.
+
+Regression tests simulate a two-minute external fade, context recreation,
+temporary target matches, GDI changes, ordinary profile changes, independent
+monitors, and automatic resumption of an unchanged manual target. A corrected
+build was installed locally; physical verification during a subsequent real
+wake/solar transition remains pending.
+
 ## Continuous-flash incident and 0.6.2 fix
 
 On 2026-10-30 the user reported continuous blue flashes. Stopping Candlelight

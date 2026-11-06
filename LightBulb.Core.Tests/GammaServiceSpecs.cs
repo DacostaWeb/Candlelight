@@ -15,6 +15,8 @@ public class GammaServiceSpecs
         public bool Succeeds { get; set; } = true;
         public bool KeepCurrent { get; set; }
         public int Verifications { get; private set; }
+        public bool IsGammaDeferred { get; set; }
+        public string? FailureReason { get; set; }
 
         public bool EnsureGamma(double red, double green, double blue)
         {
@@ -24,6 +26,8 @@ public class GammaServiceSpecs
 
         public bool SetGamma(double red, double green, double blue)
         {
+            if (IsGammaDeferred)
+                return false;
             Writes.Add(new(red, green, blue));
             return Succeeds;
         }
@@ -35,6 +39,91 @@ public class GammaServiceSpecs
 
     private static GammaService.DisplayContext Context(string id, Device device) =>
         new(new DisplayInfo(id, id, id, false, new Rect(0, 0, 1920, 1080)), device);
+
+    [Fact]
+    public void A_deferred_manual_target_retries_without_polling_or_another_target_change()
+    {
+        long now = 10000;
+        var device = new Device();
+        using var service = new GammaService(
+            new SettingsService(),
+            () => [Context("internal", device)],
+            () => now,
+            false
+        );
+        service.SetGamma(new(2700, 1));
+        device.Writes.Clear();
+        device.IsGammaDeferred = true;
+        service.InvalidateGamma();
+        now += 250;
+        service.SetGamma(new(2700, 1));
+        Assert.Empty(device.Writes);
+        Assert.Contains("automaticamente", service.FailureReasons["internal"]);
+
+        now += 5000;
+        device.IsGammaDeferred = false;
+        service.SetGamma(new(2700, 1));
+        Assert.Single(device.Writes);
+        Assert.Empty(service.FailedDisplayIds);
+    }
+
+    [Fact]
+    public void A_deferred_monitor_keeps_its_latest_target_and_other_monitors_continue()
+    {
+        var deferred = new Device { IsGammaDeferred = true };
+        var healthy = new Device();
+        using var service = new GammaService(
+            new SettingsService(),
+            () => [Context("waiting", deferred), Context("healthy", healthy)],
+            () => 10000,
+            false
+        );
+        service.SetGamma(new(500, 0.25));
+        service.SetGamma(new(2700, 1));
+        Assert.Empty(deferred.Writes);
+        Assert.Equal(2, healthy.Writes.Count);
+        deferred.IsGammaDeferred = false;
+        service.SetGamma(new(2700, 1));
+        Assert.Equal(GammaColor.FromConfiguration(new(2700, 1)), Assert.Single(deferred.Writes));
+        Assert.Empty(service.FailedDisplayIds);
+    }
+
+    [Fact]
+    public void A_read_failure_during_deferral_still_requires_an_explicit_retry()
+    {
+        var device = new Device { IsGammaDeferred = true, FailureReason = "readback unavailable" };
+        using var service = new GammaService(
+            new SettingsService(),
+            () => [Context("internal", device)],
+            () => 10000,
+            false
+        );
+        service.SetGamma(new(2700, 1));
+        Assert.Contains("suspensos", service.FailureReasons["internal"]);
+        device.IsGammaDeferred = false;
+        device.FailureReason = null;
+        service.SetGamma(new(4000, 1));
+        Assert.Empty(device.Writes);
+        service.Recover();
+        Assert.Single(device.Writes);
+        Assert.Empty(service.FailedDisplayIds);
+    }
+
+    [Fact]
+    public void A_deferred_monitor_is_not_reset_when_the_app_closes()
+    {
+        var device = new Device { IsGammaDeferred = true };
+        using (
+            var service = new GammaService(
+                new SettingsService(),
+                () => [Context("internal", device)],
+                () => 10000,
+                false
+            )
+        )
+            service.SetGamma(new(2700, 1));
+        Assert.Equal(0, device.Resets);
+    }
 
     [Fact]
     public void Gamma_is_routed_independently_to_each_monitor()

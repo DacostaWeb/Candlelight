@@ -50,6 +50,7 @@ public sealed class GammaService : IDisposable
     private readonly Dictionary<string, string> _suspendedDisplays = new(
         StringComparer.OrdinalIgnoreCase
     );
+    private readonly HashSet<string> _deferredDisplays = new(StringComparer.OrdinalIgnoreCase);
     private ColorConfiguration _fallback = ColorConfiguration.Default;
     private string? _lastTrace;
 
@@ -489,6 +490,7 @@ public sealed class GammaService : IDisposable
                 );
                 if (
                     !stale
+                    && !_deferredDisplays.Contains(context.Info.Id)
                     && _applied.TryGetValue(context.Info.Id, out var previous)
                     && !GammaColor.RequiresUpdate(previous, config, 1, 0.001)
                 )
@@ -505,9 +507,23 @@ public sealed class GammaService : IDisposable
                         $"Color {(force ? "recovery" : "update")} [{context.Info.Name}]: {config}; {context.Device.ApplyDiagnostics}; write={context.Device.DidWriteGamma}; success={applied}; {Stopwatch.GetElapsedTime(started).TotalMilliseconds:F1} ms"
                     );
                 if (applied)
+                {
                     _applied[context.Info.Id] = config;
+                    _deferredDisplays.Remove(context.Info.Id);
+                }
+                else if (context.Device.IsGammaDeferred && context.Device.FailureReason is null)
+                {
+                    failures.Add(context.Info.Id);
+                    reasons[context.Info.Id] =
+                        "A aguardar que a cor do Windows estabilize. Os ajustes retomam automaticamente.";
+                    if (_deferredDisplays.Add(context.Info.Id))
+                        Diagnostics.ColorTrace.Write(
+                            $"Color deferred [{context.Info.Name}]: external color transition; waiting without writes"
+                        );
+                }
                 else
                 {
+                    _deferredDisplays.Remove(context.Info.Id);
                     failures.Add(context.Info.Id);
                     reasons[context.Info.Id] =
                         (context.Device.FailureReason ?? "O driver recusou os valores pedidos.")
@@ -559,7 +575,11 @@ public sealed class GammaService : IDisposable
             foreach (var context in _contexts)
             {
                 // Leave an unavailable/contested output alone, including at exit.
-                if (!_preserveGammaOnExit && !_suspendedDisplays.ContainsKey(context.Info.Id))
+                if (
+                    !_preserveGammaOnExit
+                    && !_suspendedDisplays.ContainsKey(context.Info.Id)
+                    && !_deferredDisplays.Contains(context.Info.Id)
+                )
                     context.Device.ResetGamma();
                 context.Device.Dispose();
             }

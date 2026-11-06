@@ -20,6 +20,10 @@ public class GammaRampWriterSpecs
         public GammaRamp Color { get; private set; } = GammaRamp.Identity();
         public List<string> Writes { get; } = [];
 
+        public void ChangeColor(GammaRamp ramp) => Color = ramp;
+
+        public void ChangeGdi(GammaRamp ramp) => Gdi = ramp;
+
         public bool WriteGdi(ref GammaRamp ramp)
         {
             Writes.Add("gdi");
@@ -309,6 +313,133 @@ public class GammaRampWriterSpecs
         Assert.NotNull(writer.FailureReason);
         if (silent)
             Assert.True(writer.UsesColorSystem);
+    }
+
+    [Fact]
+    public void Successful_writes_replaced_by_a_windows_fade_wait_without_writing_and_resume_once()
+    {
+        long now = 0;
+        var api = new Api();
+        var writer = new GammaRampWriter(api, true, new GammaRampGuard(() => now));
+        Assert.True(writer.Apply(GammaRamp.Create(1, 0.65, 0.3, 0)));
+        api.Writes.Clear();
+
+        for (var tick = 0; tick < 2400; tick++)
+        {
+            now += 50;
+            api.ChangeColor(GammaRamp.Create(1, 0.7 + tick * 0.0001, 0.5, 0));
+            Assert.False(writer.Apply(GammaRamp.Create(1, 0.6, 0.2, 0)));
+            Assert.True(writer.IsDeferred);
+            Assert.False(writer.DidWrite);
+            Assert.Null(writer.FailureReason);
+            Assert.Empty(api.Writes);
+        }
+
+        now += 2999;
+        Assert.False(writer.Apply(GammaRamp.Create(1, 0.8, 0.6, 0)));
+        Assert.Empty(api.Writes);
+        now++;
+        var latest = GammaRamp.Create(1, 0.85, 0.65, 0);
+        Assert.True(writer.Apply(latest));
+        Assert.False(writer.IsDeferred);
+        Assert.True(latest.Matches(api.Color));
+        Assert.Equal(["color"], api.Writes);
+    }
+
+    [Fact]
+    public void A_fade_crossing_the_requested_target_does_not_end_the_quiet_interval()
+    {
+        long now = 0;
+        var api = new Api();
+        var writer = new GammaRampWriter(api, true, new GammaRampGuard(() => now));
+        var requested = GammaRamp.Create(1, 0.8, 0.6, 0);
+        Assert.True(writer.Apply(requested));
+        api.Writes.Clear();
+        api.ChangeColor(GammaRamp.Create(1, 0.9, 0.7, 0));
+        Assert.False(writer.Apply(requested));
+        now = 1000;
+        api.ChangeColor(requested);
+        Assert.False(writer.IsCurrent(requested));
+        Assert.False(writer.Apply(requested));
+        Assert.True(writer.IsDeferred);
+        now = 2000;
+        api.ChangeColor(GammaRamp.Create(1, 0.7, 0.5, 0));
+        Assert.False(writer.Apply(requested));
+        Assert.Empty(api.Writes);
+        now = 4999;
+        Assert.False(writer.Apply(requested));
+        now++;
+        Assert.True(writer.Apply(requested));
+        Assert.Equal(["color"], api.Writes);
+    }
+
+    [Fact]
+    public void Recreated_contexts_keep_waiting_and_do_not_restart_the_fight()
+    {
+        long now = 0;
+        var api = new Api();
+        var guard = new GammaRampGuard(() => now);
+        var target = GammaRamp.Create(1, 0.65, 0.3, 0);
+        Assert.True(new GammaRampWriter(api, true, guard).Apply(target));
+        api.Writes.Clear();
+        for (var i = 0; i < 100; i++)
+        {
+            now += 100;
+            api.ChangeColor(GammaRamp.Create(1, 0.9, 0.7 + i * 0.001, 0));
+            var recreated = new GammaRampWriter(api, true, guard);
+            Assert.False(recreated.IsCurrent(target));
+            Assert.False(recreated.Apply(target));
+            Assert.True(recreated.IsDeferred);
+        }
+        Assert.Empty(api.Writes);
+        now += 3000;
+        Assert.True(new GammaRampWriter(api, true, guard).Apply(target));
+        Assert.Equal(["color"], api.Writes);
+    }
+
+    [Fact]
+    public void An_external_gdi_change_is_also_deferred_and_exit_does_not_reset_it()
+    {
+        var api = new Api();
+        var writer = new GammaRampWriter(api);
+        var target = GammaRamp.Create(1, 0.8, 0.6, 0);
+        Assert.True(writer.Apply(target));
+        api.Writes.Clear();
+        api.ChangeGdi(GammaRamp.Identity());
+        Assert.False(writer.Apply(target));
+        Assert.True(writer.IsDeferred);
+        writer.Reset();
+        Assert.Empty(api.Writes);
+    }
+
+    [Fact]
+    public void Normal_profile_changes_are_not_mistaken_for_external_changes()
+    {
+        var api = new Api();
+        var writer = new GammaRampWriter(api, true);
+        for (var i = 0; i < 100; i++)
+        {
+            Assert.True(writer.Apply(GammaRamp.Create(1, 0.6 + i * 0.001, 0.3, i % 5)));
+            Assert.False(writer.IsDeferred);
+        }
+        Assert.Equal(100, api.Writes.Count);
+    }
+
+    [Fact]
+    public void A_real_write_failure_after_the_quiet_interval_is_not_reported_as_deferral()
+    {
+        long now = 0;
+        var api = new Api();
+        var writer = new GammaRampWriter(api, true, new GammaRampGuard(() => now));
+        var target = GammaRamp.Create(1, 0.65, 0.3, 0);
+        Assert.True(writer.Apply(target));
+        api.ChangeColor(GammaRamp.Identity());
+        Assert.False(writer.Apply(target));
+        now = 3000;
+        api.RejectColorWrite = true;
+        Assert.False(writer.Apply(target));
+        Assert.False(writer.IsDeferred);
+        Assert.NotNull(writer.FailureReason);
     }
 
     [Fact]

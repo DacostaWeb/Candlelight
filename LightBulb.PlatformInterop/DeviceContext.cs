@@ -10,16 +10,22 @@ public partial class DeviceContext(nint handle, string? deviceName = null)
         IGammaDevice
 {
     private static readonly ConcurrentDictionary<string, bool> ColorSystemDevices = new();
+    private static readonly ConcurrentDictionary<string, GammaRampGuard> GammaGuards = new();
     private int _gammaChannelOffset;
     private readonly NativeGammaRampApi _api = new(handle);
     private GammaRampWriter? _writer;
 
     private GammaRampWriter Writer =>
-        _writer ??= new(_api, deviceName is not null && ColorSystemDevices.ContainsKey(deviceName));
+        _writer ??= new(
+            _api,
+            deviceName is not null && ColorSystemDevices.ContainsKey(deviceName),
+            deviceName is not null ? GammaGuards.GetOrAdd(deviceName, _ => new()) : null
+        );
     public string? FailureReason => Writer.FailureReason;
     public string? ApplyDiagnostics => Writer.LastOperation;
     public bool? DidWriteGamma => Writer.DidWrite;
     public bool UsesColorSystem => Writer.UsesColorSystem;
+    public bool IsGammaDeferred => Writer.IsDeferred;
 
     private bool RememberResult(bool applied)
     {
@@ -68,7 +74,10 @@ public partial class DeviceContext(nint handle, string? deviceName = null)
     {
         Writer.Reset();
         if (deviceName is not null)
+        {
             ColorSystemDevices.TryRemove(deviceName, out _);
+            GammaGuards.TryRemove(deviceName, out _);
+        }
     }
 
     public string GetDiagnostics()
