@@ -9,12 +9,18 @@ internal interface IGammaRampApi
     bool ReadColorSystem(out GammaRamp ramp);
 }
 
-internal sealed class GammaRampWriter(IGammaRampApi api, bool useColorSystem = false)
+internal sealed class GammaRampWriter(
+    IGammaRampApi api,
+    bool useColorSystem = false,
+    GammaRampGuard? guard = null
+)
 {
+    private readonly GammaRampGuard _guard = guard ?? new();
     public bool UsesColorSystem { get; private set; } = useColorSystem;
     public string? FailureReason { get; private set; }
     public string LastOperation { get; private set; } = "";
     public bool DidWrite { get; private set; }
+    public bool IsDeferred => _guard.IsDeferred;
 
     public bool IsCurrent(GammaRamp ramp)
     {
@@ -43,7 +49,15 @@ internal sealed class GammaRampWriter(IGammaRampApi api, bool useColorSystem = f
         )
             return false;
 
+        // A fade may cross the requested target briefly. A matching sample
+        // does not mean the external owner has finished its transition.
+        if (_guard.IsDeferred && _guard.ShouldDefer(gdi, colorReadable ? color : null))
+        {
+            LastOperation += "; target matches during external transition; waiting; write skipped";
+            return false;
+        }
         LastOperation += "; verified; write skipped";
+        _guard.Remember(gdi, colorReadable ? color : null);
         return true;
     }
 
@@ -60,11 +74,17 @@ internal sealed class GammaRampWriter(IGammaRampApi api, bool useColorSystem = f
         // transition. Do not try either write API while we cannot verify it.
         if (
             ((api.IsColorSystemAvailable || UsesColorSystem) && !colorReadable)
-            || !api.ReadGdi(out _)
+            || !api.ReadGdi(out var existingGdi)
         )
         {
             FailureReason = "O Windows não permite verificar a cor deste ecrã neste momento.";
             LastOperation += "; readback unavailable; write skipped";
+            return false;
+        }
+        if (_guard.ShouldDefer(existingGdi, colorReadable ? existingColor : null))
+        {
+            LastOperation +=
+                "; external color change; waiting for 3000 ms of stable readback; write skipped";
             return false;
         }
         var activeColorLayer = colorReadable && !GammaRamp.Identity().Matches(existingColor);
@@ -74,6 +94,7 @@ internal sealed class GammaRampWriter(IGammaRampApi api, bool useColorSystem = f
             if (api.WriteGdi(ref ramp) && api.ReadGdi(out var actual) && ramp.Matches(actual))
             {
                 LastOperation += "; GDI target confirmed";
+                _guard.Remember(actual, colorReadable ? existingColor : null);
                 return true;
             }
             if (!api.IsColorSystemAvailable)
@@ -116,6 +137,7 @@ internal sealed class GammaRampWriter(IGammaRampApi api, bool useColorSystem = f
             FailureReason = "O Windows não confirmou a cor aplicada neste ecrã.";
             return false;
         }
+        _guard.Remember(gdi, color);
         return true;
     }
 
@@ -124,9 +146,14 @@ internal sealed class GammaRampWriter(IGammaRampApi api, bool useColorSystem = f
 
     public void Reset()
     {
+        // The external owner is still changing this output. Closing the app
+        // must not introduce another reset in the middle of that transition.
+        if (_guard.IsDeferred)
+            return;
         var identity = GammaRamp.Identity();
         if (UsesColorSystem)
             api.WriteColorSystem(ref identity);
         api.WriteGdi(ref identity);
+        _guard.Clear();
     }
 }
